@@ -57,6 +57,45 @@ public class AiTasteDraftTest {
     }
 
     @Test
+    public void largeInputsAreProcessedInShortFreshConversationChunks() {
+        List<String> kept = new ArrayList<>();
+        List<String> rejected = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            kept.add("Saved article " + i);
+        }
+        for (int i = 0; i < 13; i++) {
+            rejected.add("Dismissed article " + i);
+        }
+        FakeLlm llm = new FakeLlm((text, turn) -> DRAFT);
+
+        AiTasteDraft.Result r = AiTasteDraft.draftWithDebug(llm, PromptTemplate.of(SYSTEM),
+                PromptTemplate.of(USER), CURRENT, kept, rejected, Locale.ENGLISH, null);
+
+        assertEquals(TasteDraftGuard.Outcome.OK, r.verdict.outcome);
+        assertEquals(3, r.debug.chunks);
+        assertEquals(3, r.debug.completedChunks);
+        assertEquals("one fresh conversation per chunk", 3, llm.conversationsOpened);
+        assertEquals(llm.conversationsOpened, llm.conversationsClosed);
+        assertFalse("chunk 1 must not receive every saved title",
+                llm.prompts.get(0).contains("Saved article 19"));
+    }
+
+    @Test
+    public void timeoutFailureIsNamedInDebug() {
+        FakeLlm llm = new FakeLlm((text, turn) -> {
+            throw new AiException(AiException.Kind.TIMEOUT, "slow");
+        });
+
+        AiTasteDraft.Result r = AiTasteDraft.draftWithDebug(llm, PromptTemplate.of(SYSTEM),
+                PromptTemplate.of(USER), CURRENT, titles("Saved"), titles(),
+                Locale.ENGLISH, null);
+
+        assertEquals(TasteDraftGuard.Outcome.REJECTED, r.verdict.outcome);
+        assertEquals(AiException.Kind.TIMEOUT.name(), r.debug.failure);
+        assertEquals(1, r.debug.calls);
+    }
+
+    @Test
     public void afencedAnswerGetsExactlyOneRepairTurn() {
         FakeLlm llm = new FakeLlm((text, turn) ->
                 turn == 0 ? "```\n" + DRAFT + "\n```" : DRAFT);

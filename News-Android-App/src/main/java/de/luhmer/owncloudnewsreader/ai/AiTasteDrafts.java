@@ -23,6 +23,7 @@ public final class AiTasteDrafts {
     public static final String KEY_STATE = "taste_draft_state";
     public static final String KEY_BODY = "taste_draft_body";
     public static final String KEY_META = "taste_draft_meta";
+    public static final String KEY_DEBUG = "taste_draft_debug";
 
     public static final String STATE_IDLE = "idle";
     public static final String STATE_RUNNING = "running";
@@ -46,6 +47,7 @@ public final class AiTasteDrafts {
         public int removedLines;
         public int addedLines;
         public long createdAt;
+        public String debug = "";
 
         public boolean isReady() {
             return STATE_READY.equals(state) && body != null && !body.trim().isEmpty();
@@ -60,6 +62,7 @@ public final class AiTasteDrafts {
             db.putMeta(KEY_STATE, STATE_RUNNING);
             db.putMeta(KEY_BODY, "");
             db.putMeta(KEY_META, String.valueOf(System.currentTimeMillis()));
+            db.putMeta(KEY_DEBUG, "");
         } catch (Throwable t) {
             Log.w(TAG, "could not mark the draft running", t);
         }
@@ -67,14 +70,20 @@ public final class AiTasteDrafts {
 
     /** Persists a guard verdict. A rejected or repair-needing verdict is stored as a failure. */
     public static void store(AiDb db, TasteDraftGuard.Verdict verdict) {
+        store(db, verdict, null);
+    }
+
+    /** Persists a guard verdict plus model-call diagnostics. */
+    public static void store(AiDb db, TasteDraftGuard.Verdict verdict, AiTasteDraft.Debug debug) {
         if (db == null) {
             return;
         }
         if (verdict == null) {
-            fail(db, "error");
+            fail(db, "error", debug);
             return;
         }
         try {
+            db.putMeta(KEY_DEBUG, encodeDebug(debug));
             switch (verdict.outcome) {
                 case OK:
                     db.putMeta(KEY_STATE, STATE_READY);
@@ -87,7 +96,7 @@ public final class AiTasteDrafts {
                     db.putMeta(KEY_META, encode(verdict));
                     break;
                 default:
-                    fail(db, verdict.reason);
+                    fail(db, verdict.reason, debug);
                     break;
             }
         } catch (Throwable t) {
@@ -96,6 +105,10 @@ public final class AiTasteDrafts {
     }
 
     public static void fail(AiDb db, String reason) {
+        fail(db, reason, null);
+    }
+
+    public static void fail(AiDb db, String reason, AiTasteDraft.Debug debug) {
         if (db == null) {
             return;
         }
@@ -104,6 +117,7 @@ public final class AiTasteDrafts {
             db.putMeta(KEY_BODY, "");
             db.putMeta(KEY_META, System.currentTimeMillis() + "|0|0|0|0|"
                     + (reason == null ? "error" : reason));
+            db.putMeta(KEY_DEBUG, encodeDebug(debug));
         } catch (Throwable t) {
             Log.w(TAG, "could not store the failure", t);
         }
@@ -122,6 +136,8 @@ public final class AiTasteDrafts {
             String body = db.getMeta(KEY_BODY);
             d.body = body == null ? "" : body;
             decode(d, db.getMeta(KEY_META));
+            String debug = db.getMeta(KEY_DEBUG);
+            d.debug = debug == null ? "" : debug;
         } catch (Throwable t) {
             Log.w(TAG, "could not read the draft", t);
         }
@@ -136,6 +152,7 @@ public final class AiTasteDrafts {
             db.putMeta(KEY_STATE, STATE_IDLE);
             db.putMeta(KEY_BODY, "");
             db.putMeta(KEY_META, "");
+            db.putMeta(KEY_DEBUG, "");
         } catch (Throwable t) {
             Log.w(TAG, "could not clear the draft", t);
         }
@@ -146,6 +163,20 @@ public final class AiTasteDrafts {
         return System.currentTimeMillis() + "|" + (v.warnShrink ? 1 : 0) + "|"
                 + (v.warnTopicsRemoved ? 1 : 0) + "|" + v.removedTopicLines + "|"
                 + v.addedTopicLines + "|" + (v.reason == null ? "" : v.reason);
+    }
+
+    static String encodeDebug(AiTasteDraft.Debug d) {
+        if (d == null) {
+            return "";
+        }
+        return "kept=" + d.kept
+                + " rejected=" + d.rejected
+                + " chunks=" + d.completedChunks + "/" + d.chunks
+                + " calls=" + d.calls
+                + " repairs=" + d.repairs
+                + " maxPromptChars=" + d.maxPromptChars
+                + " wallMs=" + d.wallMs
+                + " failure=" + (d.failure == null ? "" : d.failure);
     }
 
     static void decode(Draft d, String meta) {

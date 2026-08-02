@@ -219,7 +219,10 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
             } else if (AiTasteDrafts.STATE_NO_CHANGE.equals(draft.state)) {
                 suggest.setSummary(R.string.pref_summary_ai_suggest_no_change);
             } else if (AiTasteDrafts.STATE_FAILED.equals(draft.state)) {
-                suggest.setSummary(R.string.pref_summary_ai_suggest_failed);
+                suggest.setSummary(draft.debug == null || draft.debug.isEmpty()
+                        ? getString(R.string.pref_summary_ai_suggest_failed)
+                        : getString(R.string.pref_summary_ai_suggest_failed_debug,
+                                draft.reason, draft.debug));
             } else if (decisions < TasteDraftGuard.LEARN_MIN_DECISIONS) {
                 suggest.setSummary(getString(R.string.pref_summary_ai_suggest_locked,
                         TasteDraftGuard.LEARN_MIN_DECISIONS, decisions));

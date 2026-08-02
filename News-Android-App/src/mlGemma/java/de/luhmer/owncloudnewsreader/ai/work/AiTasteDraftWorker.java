@@ -91,10 +91,10 @@ public class AiTasteDraftWorker extends Worker {
         final List<String> rejected = titlesOf(decisions, AiDecisionStore.STATE_REJECTED);
         final boolean gpu = prefs.getBoolean(SettingsActivity.CB_AI_GPU_BACKEND, false);
 
-        TasteDraftGuard.Verdict verdict;
+        AiTasteDraft.Result result;
         try {
-            verdict = new AiEngineManager(ctx, db).withLlm(model, gpu, token,
-                    llm -> AiTasteDraft.draft(llm, AiPrompts.tasteSystem(ctx),
+            result = new AiEngineManager(ctx, db).withLlm(model, gpu, token,
+                    llm -> AiTasteDraft.draftWithDebug(llm, AiPrompts.tasteSystem(ctx),
                             AiPrompts.tasteUser(ctx), note, kept, rejected,
                             Locale.getDefault(), token));
         } catch (Throwable t) {
@@ -102,7 +102,7 @@ public class AiTasteDraftWorker extends Worker {
             AiTasteDrafts.fail(db, "engine");
             return;
         }
-        AiTasteDrafts.store(db, verdict);
+        AiTasteDrafts.store(db, result.verdict, result.debug);
     }
 
     /**

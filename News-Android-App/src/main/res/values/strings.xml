@@ -129,6 +129,7 @@
     <string name="pref_summary_ai_suggest_ready">A suggestion is ready — tap to review it.</string>
     <string name="pref_summary_ai_suggest_no_change">No change suggested.</string>
     <string name="pref_summary_ai_suggest_failed">Could not write a suggestion. Try again later.</string>
+    <string name="pref_summary_ai_suggest_failed_debug">Could not write a suggestion: %1$s. %2$s</string>
     <string name="pref_title_ai_note_history">Previous versions</string>
     <string name="pref_summary_ai_note_history">%1$d saved</string>
     <string name="pref_title_ai_reset_taste">Forget what I like</string>

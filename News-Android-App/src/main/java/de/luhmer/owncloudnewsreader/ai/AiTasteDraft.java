@@ -42,9 +42,35 @@ public final class AiTasteDraft {
 
     public static final int TITLE_MAX_CHARS = 120;
     public static final int MAX_TOKENS = 600;
-    public static final long TIMEOUT_MS = 120_000L;
+    public static final long TIMEOUT_MS = 60_000L;
+
+    /** Small-model path: several short calls beat one giant prompt that times out. */
+    public static final int CHUNK_STARRED = 8;
+    public static final int CHUNK_DISMISSED = 6;
 
     public static final String REPAIR_INSTRUCTION = "Output only the note. No other text.";
+
+    public static final class Debug {
+        public int kept;
+        public int rejected;
+        public int chunks;
+        public int completedChunks;
+        public int calls;
+        public int repairs;
+        public int maxPromptChars;
+        public long wallMs;
+        public String failure = "";
+    }
+
+    public static final class Result {
+        public final TasteDraftGuard.Verdict verdict;
+        public final Debug debug;
+
+        Result(TasteDraftGuard.Verdict verdict, Debug debug) {
+            this.verdict = verdict;
+            this.debug = debug;
+        }
+    }
 
     private AiTasteDraft() {
         // no instances
@@ -58,8 +84,18 @@ public final class AiTasteDraft {
                                                 PromptTemplate user, String currentNote,
                                                 List<String> starred, List<String> dismissed,
                                                 Locale locale, CancelToken token) {
+        return draftWithDebug(llm, system, user, currentNote, starred, dismissed, locale,
+                token).verdict;
+    }
+
+    public static Result draftWithDebug(AiLlm llm, PromptTemplate system, PromptTemplate user,
+                                        String currentNote, List<String> starred,
+                                        List<String> dismissed, Locale locale,
+                                        CancelToken token) {
+        Debug debug = new Debug();
         if (llm == null) {
-            return TasteDraftGuard.check(null, currentNote);
+            debug.failure = "no_llm";
+            return new Result(TasteDraftGuard.check(null, currentNote), debug);
         }
         String lang = AiPromptBuilder.languageName(locale);
         AiPromptSpec spec = AiPromptSpec.builder()
@@ -75,7 +111,53 @@ public final class AiTasteDraft {
                 ? EMPTY_NOTE_PLACEHOLDER : currentNote.trim();
         List<String> starredTitles = titles(starred, MAX_STARRED);
         List<String> dismissedTitles = titles(dismissed, MAX_DISMISSED);
+        debug.kept = starredTitles.size();
+        debug.rejected = dismissedTitles.size();
 
+        List<String> allTitles = new ArrayList<>(starredTitles);
+        allTitles.addAll(dismissedTitles);
+
+        if (starredTitles.size() <= CHUNK_STARRED && dismissedTitles.size() <= CHUNK_DISMISSED) {
+            debug.chunks = 1;
+            TasteDraftGuard.Verdict v = callOnce(llm, spec, user, note, currentNote,
+                    starredTitles, dismissedTitles, allTitles, lang, token, debug);
+            if (v.outcome != TasteDraftGuard.Outcome.REJECTED) {
+                debug.completedChunks = 1;
+            }
+            return new Result(v, debug);
+        }
+
+        String workingNote = note;
+        int chunks = Math.max(chunks(starredTitles.size(), CHUNK_STARRED),
+                chunks(dismissedTitles.size(), CHUNK_DISMISSED));
+        debug.chunks = chunks;
+        for (int i = 0; i < chunks; i++) {
+            List<String> keptChunk = slice(starredTitles, i * CHUNK_STARRED, CHUNK_STARRED);
+            List<String> rejectedChunk =
+                    slice(dismissedTitles, i * CHUNK_DISMISSED, CHUNK_DISMISSED);
+            TasteDraftGuard.Verdict v = callOnce(llm, spec, user, workingNote, currentNote,
+                    keptChunk, rejectedChunk, allTitles, lang, token, debug);
+            if (v.outcome == TasteDraftGuard.Outcome.REJECTED) {
+                if (debug.failure.isEmpty()) {
+                    debug.failure = v.reason;
+                }
+                return new Result(v, debug);
+            }
+            debug.completedChunks++;
+            if (v.outcome == TasteDraftGuard.Outcome.OK) {
+                workingNote = v.draft;
+            }
+        }
+        return new Result(TasteDraftGuard.check(workingNote, currentNote, allTitles), debug);
+    }
+
+    private static TasteDraftGuard.Verdict callOnce(AiLlm llm, AiPromptSpec spec,
+                                                    PromptTemplate user, String note,
+                                                    String originalNote,
+                                                    List<String> starredTitles,
+                                                    List<String> dismissedTitles,
+                                                    List<String> allTitles, String lang,
+                                                    CancelToken token, Debug debug) {
         String userText = user.render(PromptTemplate.vars(
                 "current_note", note,
                 "starred", bullets(starredTitles),
@@ -83,36 +165,43 @@ public final class AiTasteDraft {
                 // invitation for a small model to invent one.
                 "dismissed", dismissedTitles.isEmpty() ? "(none)" : bullets(dismissedTitles),
                 "lang", lang));
-
-        List<String> allTitles = new ArrayList<>(starredTitles);
-        allTitles.addAll(dismissedTitles);
+        debug.maxPromptChars = Math.max(debug.maxPromptChars, userText.length());
 
         AiConversation conv = null;
         try {
             conv = llm.start(spec);
             LlmCall.Result r = LlmCall.run(conv, userText, TIMEOUT_MS, token);
+            debug.calls++;
+            debug.wallMs += r.wallMs;
             if (!r.ok()) {
                 Log.w(TAG, "taste draft call failed: " + r.failure.kind);
-                return TasteDraftGuard.check(null, currentNote, allTitles);
+                debug.failure = r.failure.kind.name();
+                return TasteDraftGuard.check(null, originalNote, allTitles);
             }
-            TasteDraftGuard.Verdict v = TasteDraftGuard.check(r.raw, currentNote, allTitles);
+            TasteDraftGuard.Verdict v = TasteDraftGuard.check(r.raw, originalNote, allTitles);
             if (v.outcome != TasteDraftGuard.Outcome.NEEDS_REPAIR) {
                 return v;
             }
             LlmCall.Result repair = LlmCall.run(conv, REPAIR_INSTRUCTION, TIMEOUT_MS, token);
+            debug.calls++;
+            debug.repairs++;
+            debug.wallMs += repair.wallMs;
             if (!repair.ok()) {
-                return TasteDraftGuard.check(null, currentNote, allTitles);
+                debug.failure = repair.failure.kind.name();
+                return TasteDraftGuard.check(null, originalNote, allTitles);
             }
             TasteDraftGuard.Verdict second =
-                    TasteDraftGuard.check(repair.raw, currentNote, allTitles);
+                    TasteDraftGuard.check(repair.raw, originalNote, allTitles);
             if (second.outcome == TasteDraftGuard.Outcome.NEEDS_REPAIR) {
                 // One repair, then reject. A second one has never produced a different answer.
-                return TasteDraftGuard.check(null, currentNote, allTitles);
+                debug.failure = "wrong_format_after_repair";
+                return TasteDraftGuard.check(null, originalNote, allTitles);
             }
             return second;
         } catch (Throwable t) {
             Log.w(TAG, "taste draft stage failed", t);
-            return TasteDraftGuard.check(null, currentNote, allTitles);
+            debug.failure = "runtime";
+            return TasteDraftGuard.check(null, originalNote, allTitles);
         } finally {
             if (conv != null) {
                 try {
@@ -122,6 +211,21 @@ public final class AiTasteDraft {
                 }
             }
         }
+    }
+
+    private static int chunks(int size, int chunkSize) {
+        return size == 0 ? 0 : (int) Math.ceil(size / (double) chunkSize);
+    }
+
+    private static List<String> slice(List<String> in, int start, int count) {
+        List<String> out = new ArrayList<>();
+        if (in == null) {
+            return out;
+        }
+        for (int i = start; i < in.size() && out.size() < count; i++) {
+            out.add(in.get(i));
+        }
+        return out;
     }
 
     /** Sanitised, capped, deduped, order preserved (most recent first). */
