@@ -2,8 +2,11 @@ package de.luhmer.owncloudnewsreader.ai.work;
 
 import android.app.Notification;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.util.Log;
 
@@ -20,6 +23,7 @@ import de.luhmer.owncloudnewsreader.ai.AiCorrections;
 import de.luhmer.owncloudnewsreader.ai.AiDecisions;
 import de.luhmer.owncloudnewsreader.ai.AiFeature;
 import de.luhmer.owncloudnewsreader.ai.AiNote;
+import de.luhmer.owncloudnewsreader.ai.AiRunStatus;
 import de.luhmer.owncloudnewsreader.ai.AiTriagePipeline;
 import de.luhmer.owncloudnewsreader.ai.download.AiModelRepository;
 import de.luhmer.owncloudnewsreader.ai.engine.AiEngineManager;
@@ -82,12 +86,18 @@ public class AiTriageWorker extends Worker {
                         AiDecisions.seedFromStarred(ctx);
                     }
                     long now = System.currentTimeMillis();
-                    AiTriagePipeline pipeline = new AiTriagePipeline(ctx, db, prefs);
+                    boolean allUnread = AiTriagePipeline.allUnreadWhileCharging(prefs,
+                            isCharging(ctx));
+                    int budget = allUnread ? AiTriagePipeline.ALL_UNREAD_BUDGET
+                            : AiTriagePipeline.topKFor(ctx, prefs);
+                    AiTriagePipeline pipeline = new AiTriagePipeline(ctx, db,
+                            new AiEngineManager(ctx, db), budget, budget, !allUnread);
                     AiTriagePipeline.Scoring scoring = scoringFor(ctx, db, prefs);
                     if (scoring != null) {
                         pipeline.withScoring(scoring);
                     }
                     AiTriagePipeline.Report report = pipeline.run(now, now);
+                    AiRunStatus.save(db, now, report);
                     // A separate key from PREF_AI_LAST_RUN: that one is a display-only Preference,
                     // and storing a long under a Preference's own key invites a ClassCastException
                     // the first time something asks the preference framework to read it.
@@ -142,6 +152,27 @@ public class AiTriageWorker extends Worker {
             return Integer.parseInt(v);
         } catch (NumberFormatException e) {
             return 0;
+        }
+    }
+
+    private static boolean isCharging(Context ctx) {
+        try {
+            Intent i = ctx.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (i == null) {
+                return false;
+            }
+            int plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+            if (plugged == BatteryManager.BATTERY_PLUGGED_AC
+                    || plugged == BatteryManager.BATTERY_PLUGGED_USB
+                    || plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS) {
+                return true;
+            }
+            int status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+            return status == BatteryManager.BATTERY_STATUS_CHARGING
+                    || status == BatteryManager.BATTERY_STATUS_FULL;
+        } catch (Throwable t) {
+            Log.w(TAG, "could not read battery state", t);
+            return false;
         }
     }
 

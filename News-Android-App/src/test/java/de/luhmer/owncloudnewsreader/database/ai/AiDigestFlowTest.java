@@ -78,6 +78,25 @@ public class AiDigestFlowTest {
     }
 
     @Test
+    public void readForYouArticlesAreNotIncludedInTheDigestOrAbstractInput() {
+        seed(5, NOW - HOUR, "unread");
+        seedOne(99L, "read-picked", "read", 3.0d, NOW - HOUR, NOW - HOUR, true);
+
+        AiDigestStore.Digest d = AiDigests.ensureToday(db, NOW);
+
+        assertNotNull(d);
+        assertEquals(5, d.itemCount);
+        List<AiDigestStore.Item> items = new AiDigestStore(db).items(d.id);
+        assertEquals(5, items.size());
+        for (AiDigestStore.Item i : items) {
+            assertFalse("read-picked".equals(i.aiKey));
+        }
+        for (AiDigests.Entry e : AiDigests.entries(db, d.id)) {
+            assertFalse(e.read);
+        }
+    }
+
+    @Test
     public void theSecondCallOnTheSameDayReturnsTheSameDigest() {
         seed(6, NOW - HOUR, "regulation");
         AiDigestStore.Digest first = AiDigests.ensureToday(db, NOW);
@@ -273,7 +292,12 @@ public class AiDigestFlowTest {
 
     private void seedOne(long id, String aiKey, String theme, double rank, long selectedAt,
                          long pubDate) {
-        insertRssItem(id, aiKey, pubDate);
+        seedOne(id, aiKey, theme, rank, selectedAt, pubDate, false);
+    }
+
+    private void seedOne(long id, String aiKey, String theme, double rank, long selectedAt,
+                         long pubDate, boolean read) {
+        insertRssItem(id, aiKey, pubDate, read);
         scores.enqueue(id, aiKey, 1L);
         writeScore(aiKey, rank, selectedAt, theme);
     }
@@ -295,9 +319,14 @@ public class AiDigestFlowTest {
     }
 
     private void insertRssItem(long id, String fingerprint, long pubDate) {
+        insertRssItem(id, fingerprint, pubDate, false);
+    }
+
+    private void insertRssItem(long id, String fingerprint, long pubDate, boolean read) {
         sqlite.execSQL("INSERT INTO RSS_ITEM (_id, FEED_ID, TITLE, AUTHOR, GUID, GUID_HASH,"
                         + " FINGERPRINT, READ_TEMP, PUB_DATE) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                new Object[]{id, 1L, "t" + id, "", "g" + id, "gh" + id, fingerprint, 0L, pubDate});
+                new Object[]{id, 1L, "t" + id, "", "g" + id, "gh" + id, fingerprint,
+                        read ? 1L : 0L, pubDate});
     }
 
     private List<Long> longColumn(String query) {

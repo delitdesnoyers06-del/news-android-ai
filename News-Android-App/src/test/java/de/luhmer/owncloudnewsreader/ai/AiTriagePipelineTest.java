@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
 
 import org.junit.After;
@@ -17,6 +18,7 @@ import org.robolectric.RuntimeEnvironment;
 
 import java.util.List;
 
+import de.luhmer.owncloudnewsreader.SettingsActivity;
 import de.luhmer.owncloudnewsreader.ai.engine.AiEngineManager;
 import de.luhmer.owncloudnewsreader.ai.engine.AiException;
 import de.luhmer.owncloudnewsreader.database.ai.AiCentroidStore;
@@ -80,6 +82,19 @@ public class AiTriagePipelineTest {
         assertEquals(2, c.size());
         assertEquals("undated articles are KEPT, and sort last", "fresh", c.get(0).title);
         assertEquals("undated", c.get(1).title);
+    }
+
+    @Test
+    public void chargingAllUnreadCandidatesIgnoreTheAgeWindowButNotReadItems() {
+        article(1, "fp1", "fresh", NOW - DAY, false);
+        article(2, "fp2", "read", NOW - 30 * DAY, true);
+        article(3, "fp3", "ancient", NOW - 30 * DAY, false);
+
+        List<AiCandidates.Candidate> c = AiCandidates.select(db, NOW, 100, false);
+
+        assertEquals(2, c.size());
+        assertEquals("fresh", c.get(0).title);
+        assertEquals("ancient", c.get(1).title);
     }
 
     // ------------------------------------------------------------------ cold
@@ -229,6 +244,18 @@ public class AiTriagePipelineTest {
         // The second pass picks up exactly the leftovers.
         AiTriagePipeline.Report second = run(new FakeEmbedder(), 10);
         assertEquals(5, second.embedded);
+    }
+
+    @Test
+    public void theChargingAllUnreadPreferenceOnlyAppliesWhileCharging() {
+        SharedPreferences prefs = RuntimeEnvironment.getApplication()
+                .getSharedPreferences("ai-test", 0);
+        prefs.edit()
+                .putBoolean(SettingsActivity.CB_AI_ANALYZE_ALL_UNREAD_WHILE_CHARGING, true)
+                .apply();
+
+        assertTrue(AiTriagePipeline.allUnreadWhileCharging(prefs, true));
+        assertFalse(AiTriagePipeline.allUnreadWhileCharging(prefs, false));
     }
 
     @Test

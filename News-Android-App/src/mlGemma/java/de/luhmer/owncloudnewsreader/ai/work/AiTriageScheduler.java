@@ -32,6 +32,15 @@ public final class AiTriageScheduler {
 
     /** Called from {@code onPerformSync()} after {@code startFaviconDownload()}. */
     public static void enqueueAfterSync(Context context) {
+        enqueue(context);
+    }
+
+    /** Called by the diagnostics row. Bypasses trigger preferences, but not the master switch. */
+    public static void enqueueNow(Context context) {
+        enqueue(context);
+    }
+
+    private static void enqueue(Context context) {
         if (context == null || !AiFeature.isEnabled(context)) {
             return;
         }

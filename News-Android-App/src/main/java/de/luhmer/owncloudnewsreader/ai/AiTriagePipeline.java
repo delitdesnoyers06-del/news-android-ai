@@ -55,6 +55,8 @@ public final class AiTriagePipeline {
 
     /** Ceiling on the candidate scan. Not a correctness bound - the prefilter is. */
     public static final int CANDIDATE_LIMIT = 400;
+    /** Opt-in charging mode: scan every unread candidate instead of a bounded batch. */
+    public static final int ALL_UNREAD_BUDGET = Integer.MAX_VALUE;
 
     /**
      * Embeddings per sync. Separate from {@code topK} and necessarily {@code >=} it, because every
@@ -137,18 +139,35 @@ public final class AiTriagePipeline {
     private final AiDb db;
     private final AiEngineManager engines;
     private final int topK;
+    private final int candidateLimit;
+    private final boolean recentOnly;
     private Scoring scoring;
 
     public AiTriagePipeline(Context context, AiDb db, SharedPreferences prefs) {
-        this(context, db, new AiEngineManager(context, db), topKFor(context, prefs));
+        this(context, db, new AiEngineManager(context, db), topKFor(context, prefs),
+                CANDIDATE_LIMIT, true);
     }
 
     /** Test seam: inject the engine manager and the budget directly. */
     public AiTriagePipeline(Context context, AiDb db, AiEngineManager engines, int topK) {
+        this(context, db, engines, topK, CANDIDATE_LIMIT, true);
+    }
+
+    /** Test seam: inject the engine manager plus both budgets directly. */
+    public AiTriagePipeline(Context context, AiDb db, AiEngineManager engines, int topK,
+                            int candidateLimit) {
+        this(context, db, engines, topK, candidateLimit, true);
+    }
+
+    /** Test seam: inject all candidate selection knobs directly. */
+    public AiTriagePipeline(Context context, AiDb db, AiEngineManager engines, int topK,
+                            int candidateLimit, boolean recentOnly) {
         this.app = context == null ? null : context.getApplicationContext();
         this.db = db;
         this.engines = engines;
         this.topK = Math.max(1, topK);
+        this.candidateLimit = Math.max(1, candidateLimit);
+        this.recentOnly = recentOnly;
     }
 
     /**
@@ -179,6 +198,11 @@ public final class AiTriagePipeline {
         }
     }
 
+    public static boolean allUnreadWhileCharging(SharedPreferences prefs, boolean charging) {
+        return charging && prefs != null && prefs.getBoolean(
+                SettingsActivity.CB_AI_ANALYZE_ALL_UNREAD_WHILE_CHARGING, false);
+    }
+
     /**
      * Runs one triage pass.
      *
@@ -199,7 +223,8 @@ public final class AiTriagePipeline {
         db.putMetaLong(KEY_ACTIVE_SYNC, syncId);
 
         // ---- stage 1: candidates ------------------------------------------------------------
-        List<AiCandidates.Candidate> all = AiCandidates.select(db, nowMs, CANDIDATE_LIMIT);
+        List<AiCandidates.Candidate> all = AiCandidates.select(db, nowMs, candidateLimit,
+                recentOnly);
         report.candidates = all.size();
         for (AiCandidates.Candidate c : all) {
             scores.enqueue(c.rssItemId, c.aiKey, syncId);

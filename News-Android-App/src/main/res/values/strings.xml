@@ -53,6 +53,8 @@
     <string name="pref_title_ai_run_trigger">Run triage</string>
     <string name="pref_title_ai_batch_budget">Articles to score each run</string>
     <string name="pref_summary_ai_batch_budget">More articles, better coverage, longer run.</string>
+    <string name="pref_title_ai_analyze_all_unread_while_charging">Score all unread while charging</string>
+    <string name="pref_summary_ai_analyze_all_unread_while_charging">Ignores the article limit when the phone is plugged in.</string>
     <string name="pref_title_ai_min_battery">Skip when battery is below</string>
     <string name="pref_title_ai_gpu_backend">Use GPU acceleration</string>
     <string name="pref_summary_ai_gpu_backend">Faster, but warms the phone. Turn off if triage crashes.</string>
@@ -64,7 +66,13 @@
     <string name="pref_title_ai_star_is_like">Treat starred articles as liked</string>
     <string name="pref_summary_ai_star_is_like">Your stars stay on your Nextcloud server; the AI just reads them.</string>
     <string name="pref_title_ai_last_run">Last run</string>
+    <string name="pref_title_ai_diagnostics">AI diagnostics</string>
     <string name="pref_summary_ai_last_run_never">Not run yet</string>
+    <string name="ai_diagnostics_ok">OK</string>
+    <string name="ai_diagnostics_run_now">Run now</string>
+    <string name="ai_diagnostics_run_requested">AI triage requested</string>
+    <string name="ai_diagnostics_summary">%1$s - %2$d candidates, %3$d selected, %4$d scored, %5$d unjudged - %6$s</string>
+    <string name="ai_diagnostics_details">Last run: %1$s\n\nCandidates: %2$d\nEnqueued: %3$d\nEmbedded: %4$d\nBackfilled decisions: %5$d\nSelected: %6$d\nDiscarded: %7$d\nScored: %8$d\nUnjudged: %9$d\nInvented tags: %10$d\nEmbedding backlog: %11$d\nCold start: %12$s\nStatus: %13$s</string>
     <string name="pref_title_ai_debug_log">Keep a diagnostic log</string>
     <string name="pref_summary_ai_debug_log">Records prompts and replies to a file you can attach to a bug report.</string>
 

@@ -131,6 +131,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     public static final String SP_AI_RUN_TRIGGER = "sp_ai_run_trigger";
     public static final String SP_AI_BATCH_BUDGET = "sp_ai_batch_budget";
+    public static final String CB_AI_ANALYZE_ALL_UNREAD_WHILE_CHARGING =
+            "cb_ai_analyze_all_unread_while_charging";
     public static final String SP_AI_SCORE_BATCH        = "sp_ai_score_batch";
     public static final String SP_AI_MIN_BATTERY = "sp_ai_min_battery";
     public static final String CB_AI_GPU_BACKEND = "cb_ai_gpu_backend";

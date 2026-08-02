@@ -24,11 +24,13 @@ import de.luhmer.owncloudnewsreader.R;
 import de.luhmer.owncloudnewsreader.SettingsActivity;
 import de.luhmer.owncloudnewsreader.ai.AiCapability;
 import de.luhmer.owncloudnewsreader.ai.AiNote;
+import de.luhmer.owncloudnewsreader.ai.AiRunStatus;
 import de.luhmer.owncloudnewsreader.ai.AiTasteDrafts;
 import de.luhmer.owncloudnewsreader.ai.download.AiModelRepository;
 import de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry;
 import de.luhmer.owncloudnewsreader.ai.prompt.TasteDraftGuard;
 import de.luhmer.owncloudnewsreader.ai.work.AiLazyScheduler;
+import de.luhmer.owncloudnewsreader.ai.work.AiTriageScheduler;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.ai.AiDb;
 import de.luhmer.owncloudnewsreader.database.ai.AiRubricStore;
@@ -64,6 +66,7 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
             });
         }
         bindInterests();
+        bindDiagnostics();
     }
 
     // ------------------------------------------------------------------ the interests note
@@ -122,6 +125,30 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
+    }
+
+    private void bindDiagnostics() {
+        Preference lastRun = findPreference(SettingsActivity.PREF_AI_LAST_RUN);
+        if (lastRun == null) {
+            return;
+        }
+        lastRun.setOnPreferenceClickListener(p -> {
+            AiDb db = aiDb();
+            new AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.pref_title_ai_diagnostics)
+                    .setMessage(AiRunStatus.details(requireContext(),
+                            getPreferenceManager().getSharedPreferences(), db))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setNeutralButton(R.string.ai_diagnostics_run_now, (d, w) -> runNow())
+                    .show();
+            return true;
+        });
+    }
+
+    private void runNow() {
+        AiTriageScheduler.enqueueNow(requireContext().getApplicationContext());
+        Toast.makeText(requireContext(), R.string.ai_diagnostics_run_requested,
+                Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -239,7 +266,17 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
         bindEmbedderStatus(repo);
         bindManageSummary(repo);
         bindTierOnlyRows();
+        bindDiagnosticsSummary();
         refreshNoteSummary();
+    }
+
+    private void bindDiagnosticsSummary() {
+        Preference lastRun = findPreference(SettingsActivity.PREF_AI_LAST_RUN);
+        if (lastRun != null) {
+            lastRun.setTitle(R.string.pref_title_ai_diagnostics);
+            lastRun.setSummary(AiRunStatus.summary(requireContext(),
+                    getPreferenceManager().getSharedPreferences(), aiDb()));
+        }
     }
 
     /**

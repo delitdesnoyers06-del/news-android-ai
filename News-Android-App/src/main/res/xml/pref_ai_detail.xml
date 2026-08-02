@@ -85,6 +85,13 @@
             android:positiveButtonText="@null"
             app:iconSpaceReserved="false" />
 
+        <SwitchPreference
+            android:key="cb_ai_analyze_all_unread_while_charging"
+            android:title="@string/pref_title_ai_analyze_all_unread_while_charging"
+            android:summary="@string/pref_summary_ai_analyze_all_unread_while_charging"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
         <ListPreference
             android:key="sp_ai_min_battery"
             android:title="@string/pref_title_ai_min_battery"
@@ -171,8 +178,7 @@
 
         <Preference
             android:key="pref_ai_last_run"
-            android:title="@string/pref_title_ai_last_run"
-            android:selectable="false"
+            android:title="@string/pref_title_ai_diagnostics"
             app:iconSpaceReserved="false" />
 
         <SwitchPreference

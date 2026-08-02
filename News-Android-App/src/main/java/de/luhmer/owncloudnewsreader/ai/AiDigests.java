@@ -117,7 +117,8 @@ public final class AiDigests {
     }
 
     /**
-     * Everything selected in {@code (from, to]}, joined to the article for its title and date.
+     * Everything still unread and selected in {@code (from, to]}, joined to the article for its
+     * title and date.
      *
      * <p>{@code SCORED_AT} is the selection instant. Using {@code PUB_DATE} here instead would be the
      * single most likely way to get this wrong, and it would look right for weeks: on a healthy feed
@@ -135,6 +136,7 @@ public final class AiDigests {
                 + " JOIN RSS_ITEM ON RSS_ITEM._id = AI_SCORE.RSS_ITEM_ID"
                 + " LEFT JOIN FEED ON FEED._id = RSS_ITEM.FEED_ID"
                 + " WHERE AI_SCORE.STATUS = ?"
+                + "   AND RSS_ITEM.READ_TEMP != 1"
                 + "   AND AI_SCORE.SCORED_AT > ? AND AI_SCORE.SCORED_AT <= ?"
                 + " ORDER BY AI_SCORE.RANK_SCORE DESC, RSS_ITEM.PUB_DATE DESC, RSS_ITEM._id DESC";
         try (Cursor c = db.query(sql, new String[]{AiScoreStore.STATUS_SELECTED,

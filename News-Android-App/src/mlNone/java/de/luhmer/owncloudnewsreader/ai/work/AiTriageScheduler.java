@@ -21,6 +21,10 @@ public final class AiTriageScheduler {
         // no AI in this flavor
     }
 
+    public static void enqueueNow(Context context) {
+        // no AI in this flavor
+    }
+
     public static void cancel(Context context) {
         // no AI in this flavor
     }
