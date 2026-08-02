@@ -22,6 +22,7 @@
 package de.luhmer.owncloudnewsreader;
 
 import static java.util.Objects.requireNonNull;
+import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_DOWNLOADED_PODCASTS;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_STARRED_ITEMS;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_UNREAD_ITEMS;
@@ -57,6 +58,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.ConcatAdapter;
 import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -74,7 +76,15 @@ import javax.inject.Inject;
 
 import de.luhmer.owncloudnewsreader.adapter.NewsListRecyclerAdapter;
 import de.luhmer.owncloudnewsreader.adapter.RssItemViewHolder;
+import de.luhmer.owncloudnewsreader.ai.AiDecisions;
+import de.luhmer.owncloudnewsreader.ai.AiDigests;
+import de.luhmer.owncloudnewsreader.ai.AiFeature;
+import de.luhmer.owncloudnewsreader.ai.ui.AiDigestActivity;
+import de.luhmer.owncloudnewsreader.ai.ui.AiHeaderAdapter;
+import de.luhmer.owncloudnewsreader.ai.work.AiLazyScheduler;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
+import de.luhmer.owncloudnewsreader.database.ai.AiDb;
+import de.luhmer.owncloudnewsreader.database.ai.AiDigestStore;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm.SORT_DIRECTION;
 import de.luhmer.owncloudnewsreader.database.model.RssItem;
 import de.luhmer.owncloudnewsreader.database.model.RssItemDao;
@@ -96,6 +106,13 @@ public class NewsReaderDetailFragment extends Fragment {
 
     private static final String LAYOUT_MANAGER_STATE = "LAYOUT_MANAGER_STATE";
 
+    /**
+     * The two new values of {@code sp_swipe_*_action}. They are opt-in globally and <b>forced</b>
+     * inside the For-You folder, which exists to produce decisions (PLAN D5).
+     */
+    private static final String SWIPE_AI_MORE = "4";
+    private static final String SWIPE_AI_LESS = "5";
+
     protected final String TAG = getClass().getCanonicalName();
 
     FragmentNewsreaderDetailBinding binding;
@@ -113,6 +130,17 @@ public class NewsReaderDetailFragment extends Fragment {
     private int previousFirstVisibleItem = -1;
 
     private Long idFolder;
+
+    /**
+     * The article adapter, held as a field rather than fished back out of
+     * {@code binding.list.getAdapter()}: once a ConcatAdapter wraps it, that cast is a
+     * ClassCastException (PLAN D31). Cleared in {@link #onDestroyView()} with the binding.
+     */
+    private NewsListRecyclerAdapter newsAdapter;
+    private AiHeaderAdapter aiHeaderAdapter;
+    /** The theme chip currently selected on the digest card. {@code null} = no filter. */
+    private String aiThemeFilter;
+
     private String title;
     private int onResumeCount = 0;
     private RecyclerView.OnItemTouchListener itemTouchListener;
@@ -197,7 +225,15 @@ public class NewsReaderDetailFragment extends Fragment {
 
         this.idFeed = idFeed;
         this.idFolder = idFolder;
+        // A theme chip belongs to one digest in one folder. Carrying it across would filter an
+        // unrelated list by a slug that means nothing there.
+        this.aiThemeFilter = null;
         setTitle(title);
+
+        // The For-You folder overrides the global swipe prefs, so the drawables have to follow the
+        // folder and not only onResume(). Without this the user sees a star while they are telling
+        // the taste model "less like this".
+        updateSwipeDrawables(true);
 
         if (updateListView) {
             updateCurrentRssView();
@@ -214,8 +250,13 @@ public class NewsReaderDetailFragment extends Fragment {
         mSyncWhenScrolledToBottomEnabled = mPrefs.getBoolean(SettingsActivity.CB_SYNC_WHEN_SCROLLED_TO_BOTTOM_STRING, false);
         this.initFastDoneAll(this.requireView());
 
-        //When the fragment is instantiated by the xml file, onResume will be called twice
-        if (onResumeCount >= 2) {
+        // The digest screen overwrites CURRENT_RSS_ITEM_VIEW with its own article list so the pager
+        // opens the right article. Coming back here without rebuilding would page the digest's
+        // articles into this list.
+        if (AiDigests.consumeCurrentViewDirty()) {
+            updateCurrentRssView();
+        } else if (onResumeCount >= 2) {
+            //When the fragment is instantiated by the xml file, onResume will be called twice
             refreshCurrentRssView();
         }
         onResumeCount++;
@@ -228,14 +269,19 @@ public class NewsReaderDetailFragment extends Fragment {
     protected void updateMenuItemsState() {
         NewsReaderListActivity nla = (NewsReaderListActivity) mActivity;
         if(nla != null && nla.getMenuItemDownloadMoreItems() != null) {
-            nla.getMenuItemDownloadMoreItems().setEnabled(idFolder == null || idFolder != ALL_UNREAD_ITEMS.getValue());
+            // "Download more items" is meaningless in the AI folder: it is a ranked view over
+            // what is already cached, not a per-feed window into the server.
+            nla.getMenuItemDownloadMoreItems().setEnabled(idFolder == null
+                    || (idFolder != ALL_UNREAD_ITEMS.getValue() && idFolder != AI_FOR_YOU.getValue()));
         }
     }
 
     protected void notifyDataSetChangedOnAdapter() {
-        NewsListRecyclerAdapter nca = (NewsListRecyclerAdapter) binding.list.getAdapter();
-        if (nca != null) {
-            nca.notifyDataSetChanged();
+        // The list adapter may be a ConcatAdapter (AI header + articles), so notify whatever is
+        // actually attached rather than casting to the article adapter.
+        RecyclerView.Adapter<?> attached = binding.list.getAdapter();
+        if (attached != null) {
+            attached.notifyDataSetChanged();
         }
     }
 
@@ -244,7 +290,7 @@ public class NewsReaderDetailFragment extends Fragment {
      */
     protected void refreshCurrentRssView() {
         Log.v(TAG, "refreshCurrentRssView");
-        NewsListRecyclerAdapter nra = ((NewsListRecyclerAdapter) binding.list.getAdapter());
+        NewsListRecyclerAdapter nra = newsAdapter;
 
         if (nra != null) {
             nra.refreshAdapterDataAsync(() -> {
@@ -285,6 +331,16 @@ public class NewsReaderDetailFragment extends Fragment {
         return binding.list;
     }
 
+    /**
+     * The article adapter. Callers used to cast {@code getRecyclerView().getAdapter()} to this type;
+     * in the "For you" folder that object is a {@link ConcatAdapter} and the cast throws.
+     *
+     * @return {@code null} before the first load completes
+     */
+    public NewsListRecyclerAdapter getNewsAdapter() {
+        return newsAdapter;
+    }
+
     public LinearLayoutManager getLayoutManager() {
         return (LinearLayoutManager) binding.list.getLayoutManager();
     }
@@ -304,11 +360,24 @@ public class NewsReaderDetailFragment extends Fragment {
     void loadRssItemsIntoView(List<RssItem> rssItems) {
         previousFirstVisibleItem = -1;
         try {
-            NewsListRecyclerAdapter nra = ((NewsListRecyclerAdapter) binding.list.getAdapter());
-            if (nra == null) {
-                nra = new NewsListRecyclerAdapter(mActivity, binding.list, mActivity, mPostDelayHandler, mPrefs);
-                binding.list.setAdapter(nra);
+            // Rebuild when the wiring has to change, not only when there is no adapter at all:
+            // switching between "For you" and any other folder switches between a ConcatAdapter and
+            // a bare one. A ConcatAdapter keeps an observer registered on every child it was given,
+            // so the article adapter is rebuilt with it rather than being handed to a second parent.
+            boolean wantsHeader = isAiFolder();
+            if (newsAdapter == null || wantsHeader != (aiHeaderAdapter != null)) {
+                newsAdapter = new NewsListRecyclerAdapter(mActivity, binding.list, mActivity, mPostDelayHandler, mPrefs);
+                if (wantsHeader) {
+                    // ConcatAdapter, not a view type at position 0 (PLAN D31): NewsListRecyclerAdapter
+                    // indexes lazyList by adapter position in four places.
+                    aiHeaderAdapter = new AiHeaderAdapter(new DigestCardListener());
+                    binding.list.setAdapter(new ConcatAdapter(aiHeaderAdapter, newsAdapter));
+                } else {
+                    aiHeaderAdapter = null;
+                    binding.list.setAdapter(newsAdapter);
+                }
             }
+            NewsListRecyclerAdapter nra = newsAdapter;
             nra.updateAdapterData(rssItems);
 
             binding.pbLoading.setVisibility(View.GONE);
@@ -329,6 +398,10 @@ public class NewsReaderDetailFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         binding = FragmentNewsreaderDetailBinding.inflate(inflater, container, false);
+        // The view is new, so the adapters attached to the previous one are gone with it. Holding a
+        // stale field here would silently update a RecyclerView nobody is looking at.
+        newsAdapter = null;
+        aiHeaderAdapter = null;
 
         binding.list.setHasFixedSize(true);
         binding.list.setLayoutManager(new LazyLoadingLinearLayoutManager(mActivity, RecyclerView.VERTICAL, false));
@@ -357,13 +430,16 @@ public class NewsReaderDetailFragment extends Fragment {
                     Log.v(TAG, "Scroll Delta y: " + dy);
 
                     LinearLayoutManager linearLayoutManager = (LinearLayoutManager) binding.list.getLayoutManager();
-                    NewsListRecyclerAdapter adapter = (NewsListRecyclerAdapter) binding.list.getAdapter();
+                    NewsListRecyclerAdapter adapter = newsAdapter;
+                    RecyclerView.Adapter<?> attached = binding.list.getAdapter();
 
-                    if (linearLayoutManager != null && adapter != null) {
+                    if (linearLayoutManager != null && adapter != null && attached != null) {
                         int firstVisibleItem = linearLayoutManager.findFirstVisibleItemPosition();
                         int lastVisibleItem = linearLayoutManager.findLastVisibleItemPosition();
                         int visibleItemCount = lastVisibleItem - firstVisibleItem;
-                        int totalItemCount = adapter.getItemCount();
+                        // Layout positions are ConcatAdapter positions, so the total must be too, or
+                        // "reached the bottom" fires one row early for the whole AI folder.
+                        int totalItemCount = attached.getItemCount();
                         boolean reachedBottom = (lastVisibleItem == (totalItemCount - 1));
 
                         if (mMarkAsReadWhileScrollingEnabled) {
@@ -420,8 +496,12 @@ public class NewsReaderDetailFragment extends Fragment {
         for (int i = firstVisibleItem; i < firstVisibleItem + numberItemsAhead; i++) {
             //Log.v(TAG, "Mark item as read: " + i);
 
-            RssItemViewHolder vh = (RssItemViewHolder) binding.list.findViewHolderForLayoutPosition(i);
-            if (vh != null && !vh.shouldStayUnread()) {
+            // instanceof, NOT a cast: the position may hold a ProgressViewHolder (or, once the AI
+            // header lands, a non-article holder). The unchecked cast that used to be here was a
+            // ClassCastException waiting for the first list that is not all RssItemViewHolders.
+            // Compare the correct shape a few lines below.
+            RecyclerView.ViewHolder vhTop = binding.list.findViewHolderForLayoutPosition(i);
+            if (vhTop instanceof RssItemViewHolder vh && !vh.shouldStayUnread()) {
                 adapter.changeReadStateOfItem(vh, true);
             }
         }
@@ -459,8 +539,11 @@ public class NewsReaderDetailFragment extends Fragment {
      * @param forceUpdate force swipe drawables to be reloaded
      */
     private void updateSwipeDrawables(boolean forceUpdate) {
-        String leftAction  = mPrefs.getString(SP_SWIPE_LEFT_ACTION, SP_SWIPE_LEFT_ACTION_DEFAULT);
-        String rightAction = mPrefs.getString(SP_SWIPE_RIGHT_ACTION, SP_SWIPE_RIGHT_ACTION_DEFAULT);
+        boolean ai = isAiFolder();
+        String leftAction  = ai ? SWIPE_AI_LESS
+                : mPrefs.getString(SP_SWIPE_LEFT_ACTION, SP_SWIPE_LEFT_ACTION_DEFAULT);
+        String rightAction = ai ? SWIPE_AI_MORE
+                : mPrefs.getString(SP_SWIPE_RIGHT_ACTION, SP_SWIPE_RIGHT_ACTION_DEFAULT);
 
         if (!forceUpdate && leftAction.equals(prevLeftAction) && rightAction.equals(prevRightAction)) {
             return;
@@ -477,12 +560,151 @@ public class NewsReaderDetailFragment extends Fragment {
         styledAttributes.recycle();
     }
 
+    /** True while the "For you" virtual folder is on screen. */
+    private boolean isAiFolder() {
+        return idFolder != null && idFolder == AI_FOR_YOU.getValue();
+    }
+
+    /**
+     * Records a taste decision from a swipe and offers the mandatory undo (PLAN D5).
+     *
+     * <p>The row leaves the list immediately - the user just said they do not want to see it - and
+     * the Snackbar gives them 5 s to take it back. <b>Undo appends an {@code undo} decision row, it
+     * never deletes the {@code keep}/{@code reject} one</b>: the disagreement history is the input
+     * to the learn loop and is never erased (PLAN invariant 6).</p>
+     *
+     * <p>{@code record()} returning false (illegal transition, AI storage unavailable) is silent by
+     * design; the row still leaves the list, because the list is a view and the decision store is
+     * the truth, and they are allowed to disagree for one refresh.</p>
+     */
+    private void applyAiDecision(RssItemViewHolder vh, boolean positive) {
+        final RssItem item = vh.getRssItem();
+        final int pos = vh.getBindingAdapterPosition();
+        // getBindingAdapterPosition(), not getAbsoluteAdapterPosition(): with the digest card at
+        // the top these differ by one, and removeItemAt() indexes the article adapter.
+        final NewsListRecyclerAdapter adapter = newsAdapter;
+        if (item == null || adapter == null || pos == RecyclerView.NO_POSITION) {
+            return;
+        }
+
+        AiDecisions.record(requireContext(), item,
+                positive ? AiDecisions.KEEP : AiDecisions.REJECT, AiDecisions.SOURCE_SWIPE);
+        adapter.removeItemAt(pos);
+
+        Snackbar.make(binding.getRoot(),
+                        getString(positive ? R.string.ai_snack_more_like_this
+                                : R.string.ai_snack_less_like_this),
+                        BaseTransientBottomBar.LENGTH_LONG)
+                .setAnchorView(binding.fabDoneAll.getVisibility() == View.VISIBLE
+                        ? binding.fabDoneAll : null)
+                .setAction(R.string.ai_snack_undo, v -> {
+                    AiDecisions.record(requireContext(), item, AiDecisions.UNDO,
+                            AiDecisions.SOURCE_SWIPE);
+                    adapter.restoreItemAt(pos, item);
+                    binding.list.scrollToPosition(pos);
+                })
+                .show();
+    }
+
+    // ------------------------------------------------------------------ the digest card
+
+    /** Filled on the background thread by {@link UpdateCurrentRssViewTask}, read on the UI thread. */
+    private AiHeaderData pendingAiHeader;
+
+    private static final class AiHeaderData {
+        AiDigestStore.Digest digest;
+        List<AiDigests.Chip> chips;
+        boolean abstractPending;
+    }
+
+    /**
+     * Builds today's digest if a new day has started and enough articles have been selected since
+     * the last one, then reads back what the card needs. All SQL, no inference — the card must never
+     * wait on a model (product §3).
+     */
+    private AiHeaderData loadAiHeader(DatabaseConnectionOrm dbConn) {
+        try {
+            if (!AiFeature.isEnabled(requireContext(), mPrefs)) {
+                return null;
+            }
+            AiDb db = dbConn.aiDb();
+            if (db == null) {
+                return null;
+            }
+            AiDigestStore.Digest digest = AiDigests.ensureToday(db, System.currentTimeMillis());
+            if (digest == null || AiDigests.isDismissed(db, digest.dayKey)) {
+                return null;
+            }
+            AiHeaderData data = new AiHeaderData();
+            data.digest = digest;
+            data.chips = AiDigests.chips(db, digest.id, 3);
+            data.abstractPending =
+                    AiDigestStore.ABSTRACT_PENDING.equals(digest.abstractState);
+            return data;
+        } catch (Throwable t) {
+            // No card is a perfectly good outcome. It is never worth an empty folder.
+            Log.w(TAG, "could not prepare the digest card", t);
+            return null;
+        }
+    }
+
+    private void applyAiHeader() {
+        if (aiHeaderAdapter == null) {
+            return;
+        }
+        AiHeaderData data = pendingAiHeader;
+        if (data == null) {
+            aiHeaderAdapter.clear();
+            return;
+        }
+        aiHeaderAdapter.setDigest(data.digest, data.chips);
+        if (data.abstractPending) {
+            // Lazy on open, exactly once: ExistingWorkPolicy.KEEP makes four opens one pass.
+            AiLazyScheduler.enqueueDigest(requireContext().getApplicationContext());
+        }
+    }
+
+    /** The card's three actions. */
+    private class DigestCardListener implements AiHeaderAdapter.Listener {
+        @Override
+        public void onDigestOpen(long digestId) {
+            Intent intent = new Intent(requireContext(), AiDigestActivity.class);
+            intent.putExtra(AiDigestActivity.EXTRA_DIGEST_ID, digestId);
+            startActivity(intent);
+        }
+
+        @Override
+        public void onDigestDismiss(long digestId) {
+            try {
+                DatabaseConnectionOrm dbConn = new DatabaseConnectionOrm(requireContext());
+                AiDb db = dbConn.aiDb();
+                if (db != null && pendingAiHeader != null) {
+                    AiDigests.dismiss(db, pendingAiHeader.digest, System.currentTimeMillis());
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "could not dismiss the digest card", t);
+            }
+            pendingAiHeader = null;
+            aiThemeFilter = null;
+            aiHeaderAdapter.clear();
+            updateCurrentRssView();
+        }
+
+        @Override
+        public void onDigestThemeSelected(String theme) {
+            aiThemeFilter = theme;
+            updateCurrentRssView();
+        }
+    }
+
     private int getLayoutId(String action) {
         switch (action) {
             case "0": return R.attr.openinbrowserDrawable;
             case "1": return R.attr.starredDrawable;
             case "2": return R.attr.markasreadDrawable;
             case "3": return R.attr.shareDrawable;
+            case SWIPE_AI_MORE: return R.attr.aiMoreDrawable;
+            case SWIPE_AI_LESS: return R.attr.aiLessDrawable;
             default:
                 Log.e(TAG, "Invalid option saved to prefs. This should not happen");
                 return Integer.MAX_VALUE;
@@ -533,7 +755,26 @@ public class NewsReaderDetailFragment extends Fragment {
             } else if (idFolder != null) {
                 if (idFolder == ALL_STARRED_ITEMS.getValue() || idFolder == ALL_DOWNLOADED_PODCASTS.getValue())
                     onlyUnreadItems = false;
+                // No AI_FOR_YOU branch on purpose: onlyUnreadItems is honoured there like anywhere
+                // else, and sortDirection is dropped inside getAllItemsIdsForFolderSQL() because
+                // "For you" is a relevance list, not a timeline (PLAN D4). Do not "wire the sort
+                // pref for consistency" here.
                 sqlSelectStatement = dbConn.getAllItemsIdsForFolderSQL(idFolder, onlyUnreadItems, sortDirection, mActivity);
+                if (isAiFolder() && aiThemeFilter != null) {
+                    // A list rebuild, not an in-memory filter: paging, mark-as-read-while-scrolling
+                    // and the swipe positions all read CURRENT_RSS_ITEM_VIEW, so filtering anywhere
+                    // else would leave them describing a list that is no longer on screen.
+                    int orderBy = sqlSelectStatement.indexOf("ORDER BY");
+                    String clause = AiDigests.themeFilterClause(aiThemeFilter);
+                    sqlSelectStatement = orderBy < 0
+                            ? sqlSelectStatement + clause
+                            : new StringBuilder(sqlSelectStatement).insert(orderBy, clause).toString();
+                }
+            }
+            if (isAiFolder()) {
+                pendingAiHeader = loadAiHeader(dbConn);
+            } else {
+                pendingAiHeader = null;
             }
             if (sqlSelectStatement != null) {
                 int index = sqlSelectStatement.indexOf("ORDER BY");
@@ -565,6 +806,7 @@ public class NewsReaderDetailFragment extends Fragment {
         @Override
         protected void onPostExecute(List<RssItem> rssItem) {
             loadRssItemsIntoView(rssItem);
+            applyAiHeader();
 
             if (rssItem.size() < 10) { // Less than 10 items in the list (usually 3-5 items fit on one screen)
                 // There is no API to check, if this listener has already been added. We don't want to
@@ -612,16 +854,17 @@ public class NewsReaderDetailFragment extends Fragment {
 
 
             LinearLayoutManager linearLayoutManager = (LinearLayoutManager) binding.list.getLayoutManager();
-            NewsListRecyclerAdapter adapter = (NewsListRecyclerAdapter) binding.list.getAdapter();
+            NewsListRecyclerAdapter adapter = newsAdapter;
+            RecyclerView.Adapter<?> attached = binding.list.getAdapter();
 
-            if (linearLayoutManager == null || adapter == null) {
+            if (linearLayoutManager == null || adapter == null || attached == null) {
                 return false;
             }
 
             int firstVisibleItem = linearLayoutManager.findFirstVisibleItemPosition();
             int lastVisibleItem = linearLayoutManager.findLastVisibleItemPosition();
             int visibleItemCount = lastVisibleItem - firstVisibleItem;
-            int totalItemCount = adapter.getItemCount();
+            int totalItemCount = attached.getItemCount();
             boolean reachedBottom = (lastVisibleItem == (totalItemCount - 1));
 
             if (mMarkAsReadWhileScrollingEnabled &&
@@ -651,14 +894,30 @@ public class NewsReaderDetailFragment extends Fragment {
         }
 
         @Override
+        public int getMovementFlags(@NonNull RecyclerView recyclerView,
+                                    @NonNull RecyclerView.ViewHolder viewHolder) {
+            // Header rows (status strip, digest card) are not articles: they must not be swipeable
+            // at all, or onSwiped() below reaches a cast it cannot satisfy.
+            return (viewHolder instanceof RssItemViewHolder)
+                    ? super.getMovementFlags(recyclerView, viewHolder) : 0;
+        }
+
+        @Override
         public void onSwiped(@NonNull final RecyclerView.ViewHolder viewHolder, final int direction) {
-            final NewsListRecyclerAdapter adapter = (NewsListRecyclerAdapter) binding.list.getAdapter();
+            if (!(viewHolder instanceof RssItemViewHolder)) {
+                return;   // belt and braces: getMovementFlags() already blocked this
+            }
+            final NewsListRecyclerAdapter adapter = newsAdapter;
 
             String swipeAction;
-            if (direction == ItemTouchHelper.LEFT)
+            if (isAiFolder()) {
+                // The For-You list exists to produce decisions; the global swipe prefs do not apply.
+                swipeAction = (direction == ItemTouchHelper.LEFT) ? SWIPE_AI_LESS : SWIPE_AI_MORE;
+            } else if (direction == ItemTouchHelper.LEFT) {
                 swipeAction = mPrefs.getString(SP_SWIPE_LEFT_ACTION, SP_SWIPE_LEFT_ACTION_DEFAULT);
-            else
+            } else {
                 swipeAction = mPrefs.getString(SP_SWIPE_RIGHT_ACTION, SP_SWIPE_RIGHT_ACTION_DEFAULT);
+            }
             switch (swipeAction) {
                 case "0": // Open link in browser and mark as read
                     String currentUrl = ((RssItemViewHolder) viewHolder).getRssItem().getLink();
@@ -683,6 +942,12 @@ public class NewsReaderDetailFragment extends Fragment {
                     share.putExtra(Intent.EXTRA_TEXT, content);
                     startActivity(Intent.createChooser(share, "Share Item"));
                     break;
+                case SWIPE_AI_MORE:
+                case SWIPE_AI_LESS:
+                    // NOT break: applyAiDecision owns the row removal and the undo path, and the
+                    // removeView() hack below would fight the notifyItemRemoved() animation.
+                    applyAiDecision((RssItemViewHolder) viewHolder, SWIPE_AI_MORE.equals(swipeAction));
+                    return;
                 default:
                     Log.e(TAG, "Swipe preferences has an invalid value");
                     break;

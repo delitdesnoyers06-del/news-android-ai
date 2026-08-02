@@ -25,6 +25,7 @@ import javax.inject.Inject;
 import de.luhmer.owncloudnewsreader.Constants;
 import de.luhmer.owncloudnewsreader.NewsReaderApplication;
 import de.luhmer.owncloudnewsreader.R;
+import de.luhmer.owncloudnewsreader.ai.work.AiTriageScheduler;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.model.Feed;
 import de.luhmer.owncloudnewsreader.database.model.Folder;
@@ -83,6 +84,11 @@ public class OwnCloudSyncAdapter extends AbstractThreadedSyncAdapter {
 
         // Download Favicons for feeds
         startFaviconDownload();
+
+        // Hand the new articles to the AI triage pass. ENQUEUE ONLY - this method is synchronous
+        // and its syncRunning flag drives the UI spinner, so a minute of on-device inference must
+        // never run inside it. No-op in the mlNone flavor and whenever the feature is off.
+        AiTriageScheduler.enqueueAfterSync(getContext());
 
 
         // Send sync finished event

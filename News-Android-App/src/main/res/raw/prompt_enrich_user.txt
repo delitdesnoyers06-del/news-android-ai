@@ -1,0 +1,13 @@
+READER'S INTERESTS
+{{interests}}
+
+ARTICLE
+{{title}}
+
+{{text}}
+
+TASK
+WHY: one sentence in {{lang}}, at most 25 words, saying why this article matters to this reader. Use the vocabulary of the interests above. Say why it matters to them, not what the article is about. Do not start with "This article" or "In this article".
+SUM: {{sum_instruction}}
+
+Write the two lines now.

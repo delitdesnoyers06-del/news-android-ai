@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The digest card, rendered by AiHeaderAdapter at position 0 of the "For you" list.
+
+  It never blocks on the LLM: the overline, the chips and the "Read digest" button all come from
+  SQL and render immediately, and the abstract line is replaced by a shimmer placeholder until (or
+  unless) AiDigestWorker produces one.
+-->
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/digest_card"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="@dimen/spacer_1x"
+    android:layout_marginEnd="@dimen/spacer_1x"
+    android:layout_marginTop="@dimen/spacer_1x"
+    android:layout_marginBottom="@dimen/spacer_1hx"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacer_2x">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/digest_overline"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAllCaps="true"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="Digest · Fri 1 Aug · 14 selected" />
+
+            <ImageButton
+                android:id="@+id/digest_dismiss"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ai_digest_dismiss"
+                android:src="@drawable/ic_ai_close_24"
+                app:tint="?attr/colorControlNormal" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/digest_abstract"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacer_1x"
+            android:ellipsize="end"
+            android:maxLines="3"
+            android:textSize="15sp"
+            android:textColor="?attr/primaryTextColor"
+            tools:text="Regulators moved on two fronts this week while three competitors shipped in the same fortnight." />
+
+        <View
+            android:id="@+id/digest_abstract_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="12dp"
+            android:layout_marginTop="@dimen/spacer_1x"
+            android:layout_marginEnd="64dp"
+            android:background="@drawable/ai_shimmer_bar"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/digest_chips"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacer_1x"
+            app:singleLine="true"
+            app:singleSelection="true" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/digest_open"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:text="@string/ai_digest_read" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

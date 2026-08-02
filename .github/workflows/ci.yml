@@ -49,10 +49,20 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 21
-      - name: Build debug APK
-        run: bash ./gradlew assembleDev --stacktrace
-      - name: Upload APK
+      # Pinned to explicit variants: the `ml` flavor dimension means a bare `assembleDev`
+      # would build four variants and there is no longer a `dev/debug` output directory.
+      # mlNone is the F-Droid/oss artifact and must stay byte-identical to the pre-AI build.
+      - name: Build debug APK (no AI)
+        run: bash ./gradlew assembleDevMlNoneDebug --stacktrace
+      - name: Build debug APK (on-device AI)
+        run: bash ./gradlew assembleDevMlGemmaDebug --stacktrace
+      - name: Upload APK (no AI)
         uses: actions/upload-artifact@v7
         with:
-          name: app-dev-debug
-          path: News-Android-App/build/outputs/apk/dev/debug/News-Android-App-dev-debug.apk
+          name: app-dev-mlNone-debug
+          path: News-Android-App/build/outputs/apk/devMlNone/debug/News-Android-App-dev-mlNone-debug.apk
+      - name: Upload APK (on-device AI)
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-dev-mlGemma-debug
+          path: News-Android-App/build/outputs/apk/devMlGemma/debug/News-Android-App-dev-mlGemma-debug.apk

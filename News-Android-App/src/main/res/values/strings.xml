@@ -20,6 +20,161 @@
         <item quantity="other">%d new items available</item>
     </plurals>
     <string name="message_bar_reload">Reload</string>
+    <string name="ai_for_you">For you</string>
+    <string name="ai_snack_more_like_this">More like this</string>
+    <string name="ai_snack_less_like_this">Less like this</string>
+    <string name="ai_snack_undo">Undo</string>
+    <string name="ai_notification_triage_running">Sorting new articles…</string>
+
+    <!-- AI: settings, main screen -->
+    <string name="pref_header_ai">AI triage</string>
+    <string name="pref_title_ai_enabled">Enable on-device AI triage</string>
+    <string name="pref_summary_ai_enabled">Rank and filter new articles with a model running on this phone. Nothing is sent anywhere.</string>
+    <string name="pref_title_ai_settings">AI settings</string>
+    <string name="pref_summary_ai_unsupported">Not supported on this device (needs a 64-bit ARM processor, 3 GB RAM, Android 7+)</string>
+    <string name="pref_summary_ai_no_model">No model installed</string>
+    <string name="pref_summary_ai_installed">%1$d models · %2$s used · %3$s free</string>
+
+    <!-- AI: settings, detail screen -->
+    <string name="pref_header_ai_models">Models</string>
+    <string name="pref_header_ai_when">When to run</string>
+    <string name="pref_header_ai_taste">What I like</string>
+    <string name="pref_header_ai_diagnostics">Diagnostics</string>
+    <string name="pref_title_ai_model_triage">Triage model</string>
+    <string name="pref_title_ai_model_embedding">Similarity model</string>
+    <string name="pref_summary_ai_model_embedding">Used to learn what you like. Required.</string>
+    <string name="pref_title_ai_enrich_enabled">Article summaries</string>
+    <string name="pref_summary_ai_enrich_enabled">Reads the full article to write a longer summary. Slow; runs only while charging.</string>
+    <string name="pref_title_ai_learn_enabled">Suggest interest updates</string>
+    <string name="ai_model_none_installed">None installed</string>
+    <string name="pref_title_ai_manage_models">Download models</string>
+    <string name="pref_title_ai_hf_token">Hugging Face access token</string>
+    <string name="pref_summary_ai_hf_token">Only needed for models published under the Gemma licence. Accept the terms on the model page, create a read token, and paste it here.</string>
+    <string name="pref_title_ai_run_trigger">Run triage</string>
+    <string name="pref_title_ai_batch_budget">Articles to score each run</string>
+    <string name="pref_summary_ai_batch_budget">More articles, better coverage, longer run.</string>
+    <string name="pref_title_ai_min_battery">Skip when battery is below</string>
+    <string name="pref_title_ai_gpu_backend">Use GPU acceleration</string>
+    <string name="pref_summary_ai_gpu_backend">Faster, but warms the phone. Turn off if triage crashes.</string>
+    <string name="pref_title_ai_wifi_only">Download models on Wi-Fi only</string>
+    <string name="pref_summary_ai_wifi_only">Models are 0.2–3.7 GB.</string>
+    <string name="pref_title_ai_thermal_pause">Pause when the phone gets hot</string>
+    <string name="pref_title_ai_interests">My interests</string>
+    <string name="pref_summary_ai_interests_empty">Not set — ranking uses only what you keep and dismiss.</string>
+    <string name="pref_title_ai_star_is_like">Treat starred articles as liked</string>
+    <string name="pref_summary_ai_star_is_like">Your stars stay on your Nextcloud server; the AI just reads them.</string>
+    <string name="pref_title_ai_last_run">Last run</string>
+    <string name="pref_summary_ai_last_run_never">Not run yet</string>
+    <string name="pref_title_ai_debug_log">Keep a diagnostic log</string>
+    <string name="pref_summary_ai_debug_log">Records prompts and replies to a file you can attach to a bug report.</string>
+
+    <!-- AI: model manager -->
+    <string name="ai_models_title">Models</string>
+    <string name="ai_models_storage_summary">%1$d installed · %2$s used · %3$s free</string>
+    <string name="ai_model_download">Download</string>
+    <string name="ai_model_resume">Resume</string>
+    <string name="ai_model_cancel">Cancel</string>
+    <string name="ai_model_delete">Delete</string>
+    <string name="ai_model_more_options">More options</string>
+    <string name="ai_model_preparing">Preparing model…</string>
+    <string name="ai_model_verifying">Checking the download…</string>
+    <string name="ai_model_chip_recommended">Recommended</string>
+    <string name="ai_model_chip_installed">Installed</string>
+    <string name="ai_model_chip_paused">Paused at %1$d%%</string>
+    <string name="ai_model_chip_needs_ram">Needs ~%1$s RAM</string>
+    <string name="ai_model_chip_needs_space">Needs %1$s more space</string>
+    <string name="ai_model_chip_broken">Broken</string>
+    <string name="ai_model_chip_gated">Needs a Hugging Face token</string>
+    <string name="ai_model_purpose_triage">Triage &amp; digests · %1$s</string>
+    <string name="ai_model_purpose_similarity">Similarity · %1$s</string>
+    <string name="ai_model_delete_confirm">Delete %1$s?</string>
+    <string name="ai_model_deleted">Deleted %1$s</string>
+    <string name="ai_model_open_page">Open model page</string>
+
+    <!-- AI: errors -->
+    <string name="ai_err_corrupt">Download was corrupted</string>
+    <string name="ai_err_no_space">Not enough space — free some room and try again</string>
+    <string name="ai_err_network">Download failed — check the connection and resume</string>
+    <string name="ai_err_gated">This model needs a Hugging Face token. Accept the licence on the model page, then paste a read token in AI settings.</string>
+    <string name="ai_err_incompatible">This model doesn\'t work with this version of the app</string>
+    <string name="ai_toast_triage_model_reset">Triage will be skipped until you choose another model.</string>
+
+    <string name="pref_title_ai_digest_notify">Daily digest notification</string>
+    <string name="pref_summary_ai_digest_notify">Tells you once a day when a digest is ready.</string>
+
+    <!-- AI: digest -->
+    <string name="ai_digest_title">Digest</string>
+    <string name="ai_digest_overline">Digest</string>
+    <string name="ai_digest_read">Read digest</string>
+    <string name="ai_digest_dismiss">Hide today\'s digest</string>
+    <string name="ai_digest_mark_all_read">Mark all as read</string>
+    <string name="ai_digest_theme_other">Everything else</string>
+    <string name="ai_digest_empty">No digest yet. One is written once you have kept a few articles in a day.</string>
+    <string name="ai_digest_open_failed">Could not open the digest</string>
+
+    <!-- AI: interests &amp; taste -->
+    <string name="ai_interests_hint">One topic per line, starting with \"- \". For example: \"- public transport regulation in Europe\".</string>
+    <string name="pref_title_ai_suggest_interests">Suggest an update</string>
+    <string name="pref_summary_ai_suggest_interests">Rewrites your interests from what you kept and dismissed. You see the changes before anything is saved.</string>
+    <string name="pref_summary_ai_suggest_locked">Available after %1$d decisions — you have %2$d.</string>
+    <string name="pref_summary_ai_suggest_running">Writing a suggestion…</string>
+    <string name="pref_summary_ai_suggest_ready">A suggestion is ready — tap to review it.</string>
+    <string name="pref_summary_ai_suggest_no_change">No change suggested.</string>
+    <string name="pref_summary_ai_suggest_failed">Could not write a suggestion. Try again later.</string>
+    <string name="pref_title_ai_note_history">Previous versions</string>
+    <string name="pref_summary_ai_note_history">%1$d saved</string>
+    <string name="pref_title_ai_reset_taste">Forget what I like</string>
+    <string name="pref_summary_ai_reset_taste">Deletes every keep and dismiss. Your interests note is kept.</string>
+    <string name="ai_reset_taste_confirm">Delete every keep and dismiss? Ranking starts from nothing again.</string>
+    <string name="ai_reset_taste_done">Forgotten. Ranking starts again from your interests.</string>
+    <string name="ai_note_revert">Revert</string>
+    <string name="ai_note_reverted">Reverted to an earlier version</string>
+
+    <!-- AI: interests diff screen -->
+    <string name="ai_diff_title">Suggested interests</string>
+    <string name="ai_diff_save">Save</string>
+    <string name="ai_diff_keep_current">Keep current</string>
+    <string name="ai_diff_warn_shrink">This suggestion removes a lot. Check it before saving.</string>
+    <string name="ai_diff_warn_topics">This suggestion removes %1$d topics. Check it before saving.</string>
+    <string name="ai_diff_no_change">No change suggested — your note already matches what you keep.</string>
+    <string name="ai_diff_none">No suggestion yet.</string>
+    <string name="ai_diff_saved">Interests updated</string>
+    <string name="ai_diff_legend">Removed lines are struck through, new lines are marked +.</string>
+
+    <plurals name="ai_digest_selected_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="ai_digest_marked_read">
+        <item quantity="one">%d article marked as read</item>
+        <item quantity="other">%d articles marked as read</item>
+    </plurals>
+    <plurals name="ai_digest_notification_text">
+        <item quantity="one">%d article picked for you today</item>
+        <item quantity="other">%d articles picked for you today</item>
+    </plurals>
+
+    <!-- AI: notification channels -->
+    <string name="ai_notification_channel_download">Model downloads</string>
+
+    <string-array name="pref_ai_run_trigger">
+        <item>After every sync</item>
+        <item>Only while charging</item>
+        <item>Only when I open the AI folder</item>
+        <item>Only when I ask</item>
+    </string-array>
+    <string-array name="pref_ai_run_trigger_values" translatable="false">
+        <item>always</item><item>charging</item><item>on_open</item><item>manual</item>
+    </string-array>
+    <string-array name="pref_ai_batch_budget_values" translatable="false">
+        <item>15</item><item>30</item><item>60</item><item>120</item>
+    </string-array>
+    <string-array name="pref_ai_min_battery">
+        <item>Never skip</item><item>15%</item><item>30%</item><item>50%</item>
+    </string-array>
+    <string-array name="pref_ai_min_battery_values" translatable="false">
+        <item>0</item><item>15</item><item>30</item><item>50</item>
+    </string-array>
     <string name="allUnreadFeeds">All unread items</string>
     <string name="starredFeeds">Starred items</string>
     <string name="downloadedPodcasts">Downloaded podcasts</string>
@@ -40,6 +195,8 @@
     <string name="action_removePodcast">Remove Podcast Media</string>
     <string name="action_openInBrowser">Open in Web browser</string>
     <string name="action_Share">Share</string>
+    <string name="action_ai_more_like_this">More like this</string>
+    <string name="action_ai_less_like_this">Less like this</string>
     <string name="action_login">Server Settings</string>
     <string name="action_save">Save</string>
     <string name="action_settings">Settings</string>
@@ -169,12 +326,16 @@
         <item>@string/action_starred</item>
         <item>@string/action_read</item>
         <item>@string/action_Share</item>
+        <item>@string/action_ai_more_like_this</item>
+        <item>@string/action_ai_less_like_this</item>
     </string-array>
     <string-array name="pref_general_swipe_action_values" translatable="false">
         <item>0</item>
         <item>1</item>
         <item>2</item>
         <item>3</item>
+        <item>4</item>
+        <item>5</item>
     </string-array>
     
     <string name="pref_rename_action_swipe_right">Action when swiping right</string>

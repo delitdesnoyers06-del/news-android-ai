@@ -16,6 +16,9 @@ import de.luhmer.owncloudnewsreader.NewsReaderListFragment;
 import de.luhmer.owncloudnewsreader.PodcastFragmentActivity;
 import de.luhmer.owncloudnewsreader.SettingsActivity;
 import de.luhmer.owncloudnewsreader.SettingsFragment;
+import de.luhmer.owncloudnewsreader.ai.ui.AiModelManagerActivity;
+import de.luhmer.owncloudnewsreader.ai.ui.AiSettingsActivity;
+import de.luhmer.owncloudnewsreader.ai.ui.AiSettingsFragment;
 import de.luhmer.owncloudnewsreader.authentication.OwnCloudSyncAdapter;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.helper.NextcloudGlideModule;
@@ -27,7 +30,7 @@ import de.luhmer.owncloudnewsreader.widget.WidgetProvider;
  */
 
 @Singleton
-@Component(modules = { ApiModule.class })
+@Component(modules = { ApiModule.class, AiModule.class })
 public interface AppComponent {
 
     void injectActivity(NewsReaderListActivity activity);
@@ -36,6 +39,8 @@ public interface AppComponent {
     void injectActivity(NewFeedActivity activity);
     void injectActivity(SettingsActivity activity);
     void injectActivity(LoginDialogActivity activity);
+    void injectActivity(AiSettingsActivity activity);
+    void injectActivity(AiModelManagerActivity activity);
 
     void injectFragment(NewsReaderListDialogFragment fragment);
     void injectFragment(NewsReaderListFragment fragment);
@@ -44,6 +49,7 @@ public interface AppComponent {
     void injectFragment(NewsReaderDetailFragment fragment);
     void injectFragment(FolderOptionsDialogFragment fragment);
     void injectFragment(AddFolderDialogFragment fragment);
+    void injectFragment(AiSettingsFragment fragment);
 
     void injectService(SyncItemStateService service);
     void injectService(OwnCloudSyncAdapter ownCloudSyncAdapter);

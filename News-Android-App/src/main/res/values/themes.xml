@@ -45,6 +45,9 @@
 
         <item name="starredDrawable">@drawable/swipe_setstarred</item>
 
+        <item name="aiMoreDrawable">@drawable/swipe_ai_more</item>
+        <item name="aiLessDrawable">@drawable/swipe_ai_less</item>
+
         <item name="news_detail_background_color">@color/news_detail_background_color</item>
 
         <item name="android:windowContentTransitions">true</item>

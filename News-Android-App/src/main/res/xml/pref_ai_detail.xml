@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PLAN D21. Three of the five per-stage model rows the product spec asked for are gone, and not
+  because they were hard: sp_ai_model_embedding can only ever have one entry (there is one embedder,
+  from a different CDN, in a different format, and TextEmbedderOptions has no dimension setter), and
+  sp_ai_model_digest / _enrich / _learn only ever hold a sentinel. A perpetually single-entry
+  disabled picker reads as broken, and three pickers for two sentinels is settings noise on a phone.
+  The keys still exist in SettingsActivity and the resolver is unchanged, so a future advanced screen
+  can expose them without a migration.
+-->
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="@string/pref_header_ai_models" app:iconSpaceReserved="false">
+
+        <ListPreference
+            android:key="sp_ai_model_triage"
+            android:title="@string/pref_title_ai_model_triage"
+            android:defaultValue=""
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="sp_ai_model_embedding"
+            android:title="@string/pref_title_ai_model_embedding"
+            android:summary="@string/pref_summary_ai_model_embedding"
+            android:selectable="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreference
+            android:key="cb_ai_enrich_enabled"
+            android:title="@string/pref_title_ai_enrich_enabled"
+            android:summary="@string/pref_summary_ai_enrich_enabled"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreference
+            android:key="cb_ai_learn_enabled"
+            android:title="@string/pref_title_ai_learn_enabled"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="pref_ai_manage_models"
+            android:title="@string/pref_title_ai_manage_models"
+            app:iconSpaceReserved="false" />
+
+        <!--
+          Always visible (PLAN D22). Every Gemma-3 repo answers 401 GatedRepo with
+          www-authenticate: Bearer, and accepting the licence in a browser does not unblock an
+          anonymous request. For those models a token is the only path, not a workaround, so hiding
+          the field behind "two consecutive 403s" hides it behind an event that never occurs.
+        -->
+        <EditTextPreference
+            android:key="edt_ai_hf_token"
+            android:title="@string/pref_title_ai_hf_token"
+            android:summary="@string/pref_summary_ai_hf_token"
+            android:defaultValue=""
+            android:inputType="textPassword"
+            android:singleLine="true"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/pref_header_ai_when" app:iconSpaceReserved="false">
+
+        <ListPreference
+            android:key="sp_ai_run_trigger"
+            android:title="@string/pref_title_ai_run_trigger"
+            android:defaultValue="charging"
+            android:entries="@array/pref_ai_run_trigger"
+            android:entryValues="@array/pref_ai_run_trigger_values"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:key="sp_ai_batch_budget"
+            android:title="@string/pref_title_ai_batch_budget"
+            android:summary="@string/pref_summary_ai_batch_budget"
+            android:defaultValue="30"
+            android:entries="@array/pref_ai_batch_budget_values"
+            android:entryValues="@array/pref_ai_batch_budget_values"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:key="sp_ai_min_battery"
+            android:title="@string/pref_title_ai_min_battery"
+            android:defaultValue="30"
+            android:entries="@array/pref_ai_min_battery"
+            android:entryValues="@array/pref_ai_min_battery_values"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            app:iconSpaceReserved="false" />
+
+        <!--
+          PLAN D26: false on every tier. We have zero LiteRT GPU numbers for any model on any
+          device, and the only GPU measurements we do have (embedder: 1445 ms init / 762 MB RSS vs
+          24.9 ms / 123 MB on CPU) point the wrong way.
+        -->
+        <SwitchPreference
+            android:key="cb_ai_gpu_backend"
+            android:title="@string/pref_title_ai_gpu_backend"
+            android:summary="@string/pref_summary_ai_gpu_backend"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreference
+            android:key="cb_ai_downloads_wifi_only"
+            android:title="@string/pref_title_ai_wifi_only"
+            android:summary="@string/pref_summary_ai_wifi_only"
+            android:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreference
+            android:key="cb_ai_thermal_pause"
+            android:title="@string/pref_title_ai_thermal_pause"
+            android:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <!-- Opt-in, off by default: a notification budget this feature has not earned yet. -->
+        <SwitchPreference
+            android:key="cb_ai_digest_notify"
+            android:title="@string/pref_title_ai_digest_notify"
+            android:summary="@string/pref_summary_ai_digest_notify"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/pref_header_ai_taste" app:iconSpaceReserved="false">
+
+        <EditTextPreference
+            android:key="edt_ai_interests"
+            android:title="@string/pref_title_ai_interests"
+            android:defaultValue=""
+            android:inputType="textMultiLine|textCapSentences"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreference
+            android:key="cb_ai_star_is_like"
+            android:title="@string/pref_title_ai_star_is_like"
+            android:summary="@string/pref_summary_ai_star_is_like"
+            android:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <!--
+          Manual trigger only, never a timer, and it never writes the note: it opens a diff the
+          reader has to accept. See AiRubricDiffActivity.
+        -->
+        <Preference
+            android:key="pref_ai_suggest_interests"
+            android:title="@string/pref_title_ai_suggest_interests"
+            android:summary="@string/pref_summary_ai_suggest_interests"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="pref_ai_note_history"
+            android:title="@string/pref_title_ai_note_history"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="pref_ai_reset_taste"
+            android:title="@string/pref_title_ai_reset_taste"
+            android:summary="@string/pref_summary_ai_reset_taste"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/pref_header_ai_diagnostics" app:iconSpaceReserved="false">
+
+        <Preference
+            android:key="pref_ai_last_run"
+            android:title="@string/pref_title_ai_last_run"
+            android:selectable="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreference
+            android:key="cb_ai_debug_log"
+            android:title="@string/pref_title_ai_debug_log"
+            android:summary="@string/pref_summary_ai_debug_log"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

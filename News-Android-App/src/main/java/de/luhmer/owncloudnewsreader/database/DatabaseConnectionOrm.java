@@ -1,6 +1,7 @@
 package de.luhmer.owncloudnewsreader.database;
 
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS;
+import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_DOWNLOADED_PODCASTS;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_ITEMS;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_STARRED_ITEMS;
@@ -11,6 +12,8 @@ import android.database.Cursor;
 import android.os.AsyncTask;
 import android.util.Log;
 import android.util.SparseArray;
+
+import androidx.annotation.VisibleForTesting;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -31,6 +34,9 @@ import de.greenrobot.dao.query.QueryBuilder;
 import de.greenrobot.dao.query.WhereCondition;
 import de.luhmer.owncloudnewsreader.Constants;
 import de.luhmer.owncloudnewsreader.NewsReaderApplication;
+import de.luhmer.owncloudnewsreader.database.ai.AiDb;
+import de.luhmer.owncloudnewsreader.database.ai.AiDebugSeed;
+import de.luhmer.owncloudnewsreader.database.ai.AiSchema;
 import de.luhmer.owncloudnewsreader.database.model.CurrentRssItemViewDao;
 import de.luhmer.owncloudnewsreader.database.model.DaoSession;
 import de.luhmer.owncloudnewsreader.database.model.Feed;
@@ -88,6 +94,16 @@ public class DatabaseConnectionOrm {
             ((NewsReaderApplication) context.getApplicationContext()).getAppComponent().injectDatabaseConnection(this);
         }
         daoSession = DatabaseHelperOrm.getDaoSession(context, databasePath);
+    }
+
+    /**
+     * Binds to an explicit session instead of the process-wide singleton, so a test can drive the
+     * real query builders against a real in-memory SQLite database without Dagger or a file on disk.
+     */
+    @VisibleForTesting
+    public DatabaseConnectionOrm(Context context, DaoSession daoSession) {
+        this.context = context;
+        this.daoSession = daoSession;
     }
 
     public void deleteOldAndInsertNewFolders (final Folder... folder) {
@@ -356,6 +372,20 @@ public class DatabaseConnectionOrm {
         return daoSession.getRssItemDao().queryBuilder().where(RssItemDao.Properties.Starred.eq(false), RssItemDao.Properties.Starred_temp.eq(true)).list();
     }
 
+    /**
+     * The most recently published starred articles, newest first. Feeds the one-time AI star seed
+     * ({@link de.luhmer.owncloudnewsreader.ai.AiDecisions#seedFromStarred}).
+     *
+     * <p>Reads {@code Starred_temp}, the local truth, so an unsynced star still counts.</p>
+     */
+    public List<RssItem> getStarredRssItemsNewestFirst(int limit) {
+        return daoSession.getRssItemDao().queryBuilder()
+                .where(RssItemDao.Properties.Starred_temp.eq(true))
+                .orderDesc(RssItemDao.Properties.PubDate, RssItemDao.Properties.Id)
+                .limit(limit)
+                .list();
+    }
+
     public List<RssItem> getAllNewUnstarredRssItems() {
         return daoSession.getRssItemDao().queryBuilder().where(RssItemDao.Properties.Starred.eq(true), RssItemDao.Properties.Starred_temp.eq(false)).list();
     }
@@ -605,10 +635,45 @@ public class DatabaseConnectionOrm {
 
 
     public String getAllItemsIdsForFolderSQL(long ID_FOLDER, boolean onlyUnread, SORT_DIRECTION sortDirection, Context context) {
+        // "For you" (-14): early return. Three properties of this string are load-bearing.
+        //  1. NO table aliases. UpdateCurrentRssViewTask injects a bare " GROUP BY FINGERPRINT "
+        //     at indexOf("ORDER BY") (NewsReaderDetailFragment). With aliases the statement still
+        //     parses and SQLite silently picks an arbitrary group member for RANK_SCORE - a list
+        //     that renders and scrolls perfectly while being mis-ranked, with no error anywhere.
+        //  2. Exactly ONE literal "ORDER BY" in the returned string, at the end.
+        //  3. sortDirection is deliberately DROPPED (PLAN D4). This is a relevance list, not a
+        //     timeline: SP_SORT_ORDER must have no effect here. Dropping the parameter inside the
+        //     builder is the one place a future "wire the pref for consistency" refactor cannot
+        //     silently re-enable it.
+        // The duplicate-fingerprint pick stays harmless because the pipeline fans a score out over
+        // every RSS_ITEM sharing an AI_KEY (PLAN D3), so the group members are identical.
+        if (ID_FOLDER == AI_FOR_YOU.getValue()) {
+            String ai = "SELECT " + RssItemDao.TABLENAME + "." + RssItemDao.Properties.Id.columnName +
+                    " FROM " + RssItemDao.TABLENAME +
+                    " JOIN AI_SCORE ON AI_SCORE.RSS_ITEM_ID = " + RssItemDao.TABLENAME + "." + RssItemDao.Properties.Id.columnName +
+                    " WHERE AI_SCORE.STATUS = 'selected'" +
+                    // A decided article leaves the queue. The decision lives in AI_TASTE, never in
+                    // AI_SCORE.STATUS, because the pipeline must never write a human word like
+                    // 'kept' (PLAN D28) — so "already judged" is expressed as the absence of a
+                    // taste row, not as a machine status. Undo deletes that row, which is exactly
+                    // what makes an undone swipe put the article back in the list.
+                    " AND NOT EXISTS (SELECT 1 FROM AI_TASTE WHERE AI_TASTE.AI_KEY = AI_SCORE.AI_KEY)";
+            if (onlyUnread) {
+                ai += " AND " + RssItemDao.TABLENAME + "." + RssItemDao.Properties.Read_temp.columnName + " != 1";
+            }
+            ai += " ORDER BY AI_SCORE.RANK_SCORE DESC, " +
+                    RssItemDao.TABLENAME + "." + RssItemDao.Properties.PubDate.columnName + " DESC, " +
+                    RssItemDao.TABLENAME + "." + RssItemDao.Properties.Id.columnName + " DESC";
+            return ai;
+        }
+
         String buildSQL = "SELECT " + RssItemDao.Properties.Id.columnName +
                 " FROM " + RssItemDao.TABLENAME;
 
-        if(!(ID_FOLDER == ALL_UNREAD_ITEMS.getValue() || ID_FOLDER == ALL_STARRED_ITEMS.getValue() || ID_FOLDER == ALL_DOWNLOADED_PODCASTS.getValue()) || ID_FOLDER == ALL_ITEMS.getValue())//Wenn nicht Alle Artikel ausgewaehlt wurde (-10) oder (-11) fuer Starred Feeds
+        // AI_FOR_YOU is in the exclusion set even though it early-returns above: without it a
+        // future refactor that removes the early return drops -14 into the real-folder branch,
+        // which produces "WHERE f._id = -14" -> zero rows, no error.
+        if(!(ID_FOLDER == ALL_UNREAD_ITEMS.getValue() || ID_FOLDER == ALL_STARRED_ITEMS.getValue() || ID_FOLDER == ALL_DOWNLOADED_PODCASTS.getValue() || ID_FOLDER == AI_FOR_YOU.getValue()) || ID_FOLDER == ALL_ITEMS.getValue())//Wenn nicht Alle Artikel ausgewaehlt wurde (-10) oder (-11) fuer Starred Feeds
         {
             buildSQL += " WHERE " + RssItemDao.Properties.FeedId.columnName + " IN " +
                     "(SELECT sc." + FeedDao.Properties.Id.columnName +
@@ -693,6 +758,36 @@ public class DatabaseConnectionOrm {
     }
 
     /**
+     * Badge for the "For you" drawer row: selected-and-still-unread articles.
+     *
+     * <p>Returns a non-null "0" when there is nothing to show, exactly like
+     * {@link #getUnreadItemsCountForSpecificFolder(SPECIAL_FOLDERS)} - that is what keeps the row
+     * visible under "show only unread" without any purge exemption (PLAN D6).</p>
+     *
+     * <p>This one-liner only works because AI_SCORE lives in the same database file (PLAN D1).</p>
+     */
+    public String getAiSelectedUnreadCount() {
+        if (!AiSchema.isReady()) {
+            return "0";
+        }
+        try {
+            String buildSQL = "SELECT COUNT(1)" +
+                    " FROM " + RssItemDao.TABLENAME +
+                    " JOIN AI_SCORE ON AI_SCORE.RSS_ITEM_ID = " + RssItemDao.TABLENAME + "." + RssItemDao.Properties.Id.columnName +
+                    " WHERE AI_SCORE.STATUS = 'selected'" +
+                    // Must match getAllItemsIdsForFolderSQL's AI_FOR_YOU branch exactly, or the
+                    // drawer badge counts articles the list no longer shows.
+                    " AND NOT EXISTS (SELECT 1 FROM AI_TASTE WHERE AI_TASTE.AI_KEY = AI_SCORE.AI_KEY)" +
+                    " AND " + RssItemDao.TABLENAME + "." + RssItemDao.Properties.Read_temp.columnName + " != 1";
+            return String.valueOf(getLongValueBySQL(buildSQL));
+        } catch (Throwable t) {
+            // A broken AI table must never take the whole sidebar down.
+            Log.e(TAG, "Failed to count selected AI items", t);
+            return "0";
+        }
+    }
+
+    /**
      *
      * @return [0] = unread items count for folders, [1] = unread items count for feeds
      */
@@ -739,6 +834,7 @@ public class DatabaseConnectionOrm {
 
         values[0].put(SPECIAL_FOLDERS.ALL_UNREAD_ITEMS.getValue(), String.valueOf(totalUnreadItemsCount));
         values[0].put(SPECIAL_FOLDERS.ALL_STARRED_ITEMS.getValue(), getUnreadItemsCountForSpecificFolder(SPECIAL_FOLDERS.ALL_STARRED_ITEMS));
+        values[0].put(AI_FOR_YOU.getValue(), getAiSelectedUnreadCount());
 
 
         return values;
@@ -801,6 +897,75 @@ public class DatabaseConnectionOrm {
     		/* SELECT * FROM rss_item WHERE read_temp = 1 ORDER BY rowid asc LIMIT 3; */
         } else {
             Log.v(TAG, "Clearing Database oversize not necessary");
+        }
+    }
+
+    /**
+     * The AI layer's handle on this session's database.
+     *
+     * <p>This is the only way anything outside {@code database/ai/} obtains one, and it hands out an
+     * {@link AiDb} rather than an {@link android.database.sqlite.SQLiteDatabase} so that the "no AI
+     * SQL outside the package" property survives. Returns {@code null} when
+     * {@link AiSchema#isReady()} is false — a broken AI schema must degrade, never throw.</p>
+     */
+    public AiDb aiDb() {
+        if (!AiSchema.isReady()) {
+            return null;
+        }
+        try {
+            return AiDb.of(daoSession.getDatabase());
+        } catch (Throwable t) {
+            Log.e(TAG, "aiDb unavailable", t);
+            return null;
+        }
+    }
+
+    /**
+     * Prunes AI rows whose article is gone. Called from {@code RssItemObservable.sync()} directly
+     * after {@link #clearDatabaseOverSize()}, which is what creates the orphans.
+     *
+     * <p>AI_DECISION / AI_TASTE / AI_CENTROID / AI_RUBRIC are never touched - they are not a cache,
+     * they are the feature. Degrades silently: a GC failure must not fail a sync.</p>
+     */
+    public void aiGarbageCollect() {
+        if (!AiSchema.isReady()) {
+            return;
+        }
+        try {
+            AiDb.of(daoSession.getDatabase()).garbageCollect();
+        } catch (Throwable t) {
+            Log.e(TAG, "aiGarbageCollect failed", t);
+        }
+    }
+
+    /**
+     * Debug-only: fabricate AI_SCORE rows for the newest cached articles.
+     *
+     * @return the number of articles that ended up {@code selected}
+     * @see de.luhmer.owncloudnewsreader.database.ai.AiDebugSeed
+     */
+    public int aiDebugSeedScores(int limit) {
+        if (!AiSchema.isReady()) {
+            return 0;
+        }
+        try {
+            return AiDebugSeed.seed(daoSession.getDatabase(), limit);
+        } catch (Throwable t) {
+            Log.e(TAG, "aiDebugSeedScores failed", t);
+            return 0;
+        }
+    }
+
+    /** Debug-only: remove everything {@link #aiDebugSeedScores(int)} wrote. */
+    public int aiDebugClearScores() {
+        if (!AiSchema.isReady()) {
+            return 0;
+        }
+        try {
+            return AiDebugSeed.clear(daoSession.getDatabase());
+        } catch (Throwable t) {
+            Log.e(TAG, "aiDebugClearScores failed", t);
+            return 0;
         }
     }
 

@@ -1,0 +1,15 @@
+Rate how relevant a news article is to a reader.
+
+Reader's interests:
+{{interests}}
+
+3 = the article is about one of these interests
+2 = clearly relevant
+1 = mentioned in passing
+0 = not related, or the text is empty or unreadable
+
+Article:
+{{title}}
+{{excerpt}}
+
+Answer with one digit: 0, 1, 2 or 3. Nothing else.

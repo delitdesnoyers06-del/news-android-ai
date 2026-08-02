@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    mlGemma flavor overlay. Merged into src/main/AndroidManifest.xml.
+
+    The two <uses-native-library> entries are what LiteRT-LM needs to reach the GPU backend.
+    Both are android:required="false": they are only honoured on API 31+ and are ignored below
+    that, and the shipped default is the CPU backend anyway (docs/ai/PLAN.md D26 — there is no
+    LiteRT GPU benchmark data for any of our models yet, and the only numbers we do have point
+    the wrong way). Declaring them now costs nothing and avoids a manifest change later when
+    spike S3 flips the default.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <uses-native-library
+            android:name="libvndksupport.so"
+            android:required="false" />
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
+
+        <!--
+            AiTriageWorker calls setForegroundAsync(). WorkManager hosts that on its own
+            SystemForegroundService, which ships with no foregroundServiceType; on API 34+ a
+            foreground service without a declared type throws MissingForegroundServiceTypeException
+            the moment it starts. tools:node="merge" adds the attribute to WorkManager's own
+            declaration rather than replacing it. Declared here and not in src/main because
+            mlNone never depends on androidx.work at all.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <!--
+            The model downloader. A plain foreground Service, not WorkManager: a 2.6 GB transfer
+            exceeds JobScheduler's window and this is user-initiated and unbounded. Declared only
+            in this flavor so the mlNone artifact does not even name a service it could not use.
+        -->
+        <service
+            android:name="de.luhmer.owncloudnewsreader.ai.download.AiModelDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+    </application>
+
+</manifest>

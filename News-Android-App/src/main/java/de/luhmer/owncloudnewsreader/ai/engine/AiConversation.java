@@ -1,0 +1,45 @@
+package de.luhmer.owncloudnewsreader.ai.engine;
+
+/**
+ * One multi-turn exchange. Not thread-safe except for {@link #cancel()}.
+ *
+ * <p>One conversation <b>per batch</b>, closed after its repair turn (PLAN D17). The repair turn
+ * needs the previous turn in context — that is the whole point of it — but batch N+1 must not
+ * inherit batch N's KV cache: that is unbounded KV growth and a decode that drifts as the run goes
+ * on.</p>
+ *
+ * <p><b>Implementations must make {@link #cancel()} and {@link #close()} mutually exclusive.</b>
+ * The watchdog fires {@code cancel()} from a scheduler thread with no ordering against the worker
+ * thread that closes the conversation, so an implementation over a native handle must not let a
+ * cancel land on a handle that {@code close()} has already freed. {@code cancel()} after
+ * {@code close()} must be a no-op, not a crash.</p>
+ */
+public interface AiConversation extends java.io.Closeable {
+
+    /**
+     * BLOCKING. Runs on the calling worker thread. Returns the model's raw text, never null.
+     *
+     * <p>Uses whatever output constraint the conversation was created with.</p>
+     */
+    String send(String userText) throws AiException;
+
+    /**
+     * BLOCKING, with a per-turn output constraint.
+     *
+     * @param format {@code null} to use the conversation's own constraint (identical to
+     *               {@link #send(String)}), {@link AiResponseFormat#NONE} to drop it for this turn,
+     *               or {@link AiResponseFormat#regex(String)} to replace it for this turn. See
+     *               {@link AiResponseFormat} for why a repair turn wants a different one.
+     */
+    String send(String userText, AiResponseFormat format) throws AiException;
+
+    /**
+     * Safe to call from any thread while {@link #send} is blocked; lands within roughly one token.
+     * The conversation stays usable afterwards, with its history cleared. A no-op once
+     * {@link #close()} has run.
+     */
+    void cancel();
+
+    @Override
+    void close();
+}

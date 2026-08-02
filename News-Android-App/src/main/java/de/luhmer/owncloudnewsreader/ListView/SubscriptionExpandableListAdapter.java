@@ -21,6 +21,7 @@
 
 package de.luhmer.owncloudnewsreader.ListView;
 
+import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_DOWNLOADED_PODCASTS;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_STARRED_ITEMS;
 import static de.luhmer.owncloudnewsreader.ListView.SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_UNREAD_ITEMS;
@@ -48,6 +49,7 @@ import java.util.List;
 
 import de.luhmer.owncloudnewsreader.R;
 import de.luhmer.owncloudnewsreader.SettingsActivity;
+import de.luhmer.owncloudnewsreader.ai.AiFeature;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.model.Feed;
 import de.luhmer.owncloudnewsreader.database.model.Folder;
@@ -85,7 +87,8 @@ public class SubscriptionExpandableListAdapter extends BaseExpandableListAdapter
     private final SharedPreferences mPrefs;
 
     public enum SPECIAL_FOLDERS  {
-        ALL_UNREAD_ITEMS(-10), ALL_STARRED_ITEMS(-11), ALL_ITEMS(-12), ALL_DOWNLOADED_PODCASTS(-13), ITEMS_WITHOUT_FOLDER(-22);
+        ALL_UNREAD_ITEMS(-10), ALL_STARRED_ITEMS(-11), ALL_ITEMS(-12), ALL_DOWNLOADED_PODCASTS(-13),
+        AI_FOR_YOU(-14), ITEMS_WITHOUT_FOLDER(-22);
 
         private final int id;
         SPECIAL_FOLDERS(int id) {
@@ -300,7 +303,12 @@ public class SubscriptionExpandableListAdapter extends BaseExpandableListAdapter
                 favIconHandler.loadFavIconForFeed(concreteFeedItem.favIcon, viewHolder.binding.imgViewFavicon);
 	        }
         } else {
-        	if(group.id_database == ALL_STARRED_ITEMS.getValue()) {
+            if (group.id_database == AI_FOR_YOU.getValue()) {
+                viewHolder.binding.imgViewExpandableIndicator.setVisibility(View.GONE);
+                viewHolder.binding.imgViewFavicon.setVisibility(View.VISIBLE);
+                rotation = 0;
+                viewHolder.binding.imgViewFavicon.setImageResource(R.drawable.ic_ai_sparkle_24dp_theme_aware);
+            } else if(group.id_database == ALL_STARRED_ITEMS.getValue()) {
                 viewHolder.binding.imgViewExpandableIndicator.setVisibility(View.GONE);
                 viewHolder.binding.imgViewFavicon.setVisibility(View.VISIBLE);
                 rotation = 0;
@@ -375,6 +383,15 @@ public class SubscriptionExpandableListAdapter extends BaseExpandableListAdapter
         showOnlyUnread = mPrefs.getBoolean(SettingsActivity.CB_SHOWONLYUNREAD_STRING, false);
 
         ArrayList<AbstractItem> mCategories = new ArrayList<>();
+        // "For you" is first (PLAN D6) and only exists on a device that can actually run the
+        // models (PLAN D9/D24) AND where the user has switched the feature on. AiFeature.isEnabled
+        // is both conditions in one call, and it is the single gate the whole AI half asks - a
+        // second, differently-spelled test here is how a drawer row outlives the feature behind it.
+        // idFolder MUST stay null - that is what routes the row to the else-branch in
+        // getGroupView() and keeps it out of the feed-children machinery.
+        if (AiFeature.isEnabled(mContext)) {
+            mCategories.add(new FolderSubscribtionItem(mContext.getString(R.string.ai_for_you), null, AI_FOR_YOU.getValue()));
+        }
         mCategories.add(new FolderSubscribtionItem(mContext.getString(R.string.allUnreadFeeds), null, ALL_UNREAD_ITEMS.getValue()));
         mCategories.add(new FolderSubscribtionItem(mContext.getString(R.string.starredFeeds), null, ALL_STARRED_ITEMS.getValue()));
         mCategories.add(new FolderSubscribtionItem(mContext.getString(R.string.downloadedPodcasts), null, ALL_DOWNLOADED_PODCASTS.getValue()));

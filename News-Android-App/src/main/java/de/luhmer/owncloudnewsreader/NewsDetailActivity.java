@@ -57,6 +57,8 @@ import java.util.Set;
 import javax.inject.Inject;
 
 import de.greenrobot.dao.query.LazyList;
+import de.luhmer.owncloudnewsreader.ai.AiDecisions;
+import de.luhmer.owncloudnewsreader.ai.AiFeature;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.model.RssItem;
 import de.luhmer.owncloudnewsreader.databinding.ActivityNewsDetailBinding;
@@ -259,6 +261,13 @@ public class NewsDetailActivity extends PodcastFragmentActivity {
 			binding.faDetailBar.faMarkAsRead.setOnClickListener(v -> NewsDetailActivity.this.markRead(currentPosition));
 			// binding.faDetailBar.faShare.setOnClickListener(v -> this.share(currentPosition));
 
+			// The two taste buttons stay GONE unless the AI feature is on - see the layout comment.
+			boolean aiOn = AiFeature.isEnabled(this, mPrefs);
+			binding.faDetailBar.faAiUp.setVisibility(aiOn ? View.VISIBLE : View.GONE);
+			binding.faDetailBar.faAiDown.setVisibility(aiOn ? View.VISIBLE : View.GONE);
+			binding.faDetailBar.faAiUp.setOnClickListener(v -> this.recordAiDecision(true));
+			binding.faDetailBar.faAiDown.setOnClickListener(v -> this.recordAiDecision(false));
+
 			binding.faDetailBar.getRoot().setVisibility(View.VISIBLE);
 
 			// initially the bar should be opened in the expanded state
@@ -394,6 +403,24 @@ public class NewsDetailActivity extends PodcastFragmentActivity {
 		if (fragment != null) { // could be null if not instantiated yet
 			fragment.pauseCurrentPage();
 		}
+	}
+
+	/**
+	 * "More like this" / "Less like this" from the reader (PLAN D5).
+	 *
+	 * <p>Unlike the swipe there is no row to remove, so there is no undo Snackbar either: the
+	 * article stays on screen and the opposite button is one tap away, which is a better undo than a
+	 * timed one. The decision itself is still append-only.</p>
+	 */
+	private void recordAiDecision(boolean positive) {
+		if (rssItems == null || currentPosition < 0 || currentPosition >= rssItems.size()) {
+			return;
+		}
+		RssItem rssItem = rssItems.get(currentPosition);
+		AiDecisions.record(this, rssItem, positive ? AiDecisions.KEEP : AiDecisions.REJECT,
+				AiDecisions.SOURCE_FASTACTION);
+		Toast.makeText(this, positive ? R.string.ai_snack_more_like_this
+				: R.string.ai_snack_less_like_this, Toast.LENGTH_SHORT).show();
 	}
 
 	public void updateActionBarIcons() {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Combined-flavor source set (dev + mlGemma): applicationId is
+    de.luhmer.owncloudnewsreader.dev.ai (both suffixes stack).
+
+    Without this file the `dev` values would win — flavor dimensions are merged in declaration
+    order and "default" is declared before "ml", so src/dev/res beats src/mlGemma/res. The
+    authority would then be ...dev while the applicationId is ...dev.ai, colliding with
+    devMlNone and making whichever APK is installed second fail to install.
+    (docs/ai/PLAN.md S9)
+-->
+<resources>
+    <string name="app_name" translatable="false">News Dev AI</string>
+    <string name="account_type" translatable="false">de.luhmer.owncloudnewsreader.dev.ai</string>
+    <string name="authority" translatable="false">de.luhmer.owncloudnewsreader.dev.ai</string>
+</resources>

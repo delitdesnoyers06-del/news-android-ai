@@ -11,6 +11,12 @@
 
     <attr name="shareDrawable" format="reference" />
 
+    <!-- AI taste swipe backgrounds. getLayoutId() feeds these straight into
+         obtainStyledAttributes(), so every theme that defines starredDrawable must define
+         these two as well or a swipe throws. -->
+    <attr name="aiMoreDrawable" format="reference" />
+    <attr name="aiLessDrawable" format="reference" />
+
     <attr name="news_detail_background_color" format="color" />
 
     <attr name="primaryTextColor" format="color" />

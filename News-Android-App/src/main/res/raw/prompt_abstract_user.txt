@@ -1,0 +1,7 @@
+ITEMS KEPT
+{{items}}
+{{brief}}
+TASK
+Write 3 to 5 sentences in {{lang}} that say what these items add up to. Do not go through the items one by one, the reader sees them right below you. Group what belongs together and name what is new.
+
+Write the paragraph now. Nothing else.

@@ -8,7 +8,7 @@ import de.luhmer.owncloudnewsreader.tests.NewsReaderListActivityUiTests;
 import de.luhmer.owncloudnewsreader.tests.NightModeTest;
 
 @Singleton
-@Component(modules = { ApiModule.class })
+@Component(modules = { ApiModule.class, AiModule.class })
 public interface TestComponent extends AppComponent {
 
     void inject(NewFeedTests newFeedTest);

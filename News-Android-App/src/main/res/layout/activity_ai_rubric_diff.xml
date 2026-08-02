@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The approval step. veille shows a difflib diff and requires a human to accept it; this is the same
+  thing with the only human available. Nothing on this screen writes the note except the Save button.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/toolbar_layout"
+        layout="@layout/toolbar_layout" />
+
+    <TextView
+        android:id="@+id/diff_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorErrorContainer"
+        android:padding="@dimen/spacer_2x"
+        android:textColor="?attr/colorOnErrorContainer"
+        android:textSize="14sp"
+        android:visibility="gone"
+        tools:text="This suggestion removes a lot. Check it before saving."
+        tools:visibility="visible" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/spacer_2x">
+
+            <TextView
+                android:id="@+id/diff_legend"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="@dimen/spacer_1x"
+                android:text="@string/ai_diff_legend"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/diff_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:lineSpacingMultiplier="1.3"
+                android:textIsSelectable="true"
+                android:textSize="15sp"
+                tools:text="- public transport regulation" />
+        </LinearLayout>
+    </ScrollView>
+
+    <com.google.android.material.divider.MaterialDivider
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="@dimen/spacer_1x">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_keep_current"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_diff_keep_current" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save_note"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ai_diff_save" />
+    </LinearLayout>
+</LinearLayout>

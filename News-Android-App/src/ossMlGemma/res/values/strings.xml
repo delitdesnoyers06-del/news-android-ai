@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Combined-flavor source set (oss + mlGemma). Multi-flavor source sets outrank single-flavor
+    ones in AGP's resource merge, which is exactly what is needed here.
+
+    `authority` and `account_type` are hardcoded strings rather than ${applicationId}
+    placeholders (see src/main/res/values/strings.xml and src/dev/res/values/strings.xml), so
+    every applicationId variation has to restate them. mlGemma adds applicationIdSuffix ".ai",
+    and a ContentProvider authority shared by two installed APKs makes the second one
+    uninstallable — so these must track the applicationId exactly. (docs/ai/PLAN.md S9)
+-->
+<resources>
+    <string name="app_name" translatable="false">News AI</string>
+    <string name="account_type" translatable="false">de.luhmer.owncloudnewsreader.ai</string>
+    <string name="authority" translatable="false">de.luhmer.owncloudnewsreader.ai</string>
+</resources>

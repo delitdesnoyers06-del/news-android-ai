@@ -148,6 +148,7 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 	public static HashSet<Long> stayUnreadItems = new HashSet<>();
 
 	private MenuItem menuItemOnlyUnread;
+	private MenuItem menuItemSearch;
 	private MenuItem menuItemDownloadMoreItems;
 
 	private Long currentFolderId;
@@ -281,7 +282,9 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 			outState.putBoolean(IS_FOLDER_BOOLEAN, ndf.getIdFeed() == null);
 			outState.putLong(ID_FEED_STRING, ndf.getIdFeed() != null ? ndf.getIdFeed() : ndf.getIdFolder());
 
-			NewsListRecyclerAdapter adapter = (NewsListRecyclerAdapter) ndf.getRecyclerView().getAdapter();
+			// getNewsAdapter(), not a cast on getAdapter(): in the "For you" folder the attached
+			// adapter is a ConcatAdapter (AI header + articles) and the cast throws.
+			NewsListRecyclerAdapter adapter = ndf.getNewsAdapter();
 			if (adapter != null) {
 				outState.putInt(LIST_ADAPTER_TOTAL_COUNT, adapter.getTotalItemCount());
 				outState.putInt(LIST_ADAPTER_PAGE_COUNT, adapter.getCachedPages());
@@ -785,6 +788,8 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 				title = getString(R.string.starredFeeds);
 			} else if (idFolder == -13) {
 				title = getString(R.string.downloadedPodcasts);
+			} else if (idFolder == SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU.getValue()) {
+				title = getString(R.string.ai_for_you);
 			}
 		} else {
 			Feed feed = dbConn.getFeedById(id);
@@ -885,6 +890,8 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 				title = getString(R.string.starredFeeds);
 			} else if (idFolder == -13) {
 				title = getString(R.string.downloadedPodcasts);
+			} else if (idFolder == SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU.getValue()) {
+				title = getString(R.string.ai_for_you);
 			}
 		}
 
@@ -916,6 +923,11 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 		menuItemDownloadMoreItems.setEnabled(false);
 
 		MenuItem searchItem = menu.findItem(R.id.menu_search);
+		menuItemSearch = searchItem;
+
+		// Debug-only: seed AI_SCORE so the "For you" folder can be exercised with no model.
+		menu.findItem(R.id.menu_ai_seed_scores).setVisible(BuildConfig.DEBUG);
+		menu.findItem(R.id.menu_ai_clear_scores).setVisible(BuildConfig.DEBUG);
 		menuItemOnlyUnread = menu.findItem(R.id.menu_toggleShowOnlyUnread);
 		menuItemOnlyUnread.setChecked(mPrefs.getBoolean(SettingsActivity.CB_SHOWONLYUNREAD_STRING, false));
 		syncMenuItemUnreadOnly();
@@ -969,6 +981,20 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 		if (menuItemOnlyUnread != null && currentFolderId != null) {
 			menuItemOnlyUnread.setVisible(!(currentFolderId == -11 || currentFolderId == -10));
 		}
+		syncMenuItemSearch();
+	}
+
+	/**
+	 * Search is hidden inside "For you": getAllItemsIdsForFolderSQLSearch() deliberately has no AI
+	 * branch (searching a relevance-ordered list is incoherent, and -14 would fall into the
+	 * real-folder branch and return nothing).
+	 */
+	private void syncMenuItemSearch() {
+		if (menuItemSearch != null) {
+			boolean isAiFolder = currentFolderId != null
+					&& currentFolderId == SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU.getValue();
+			menuItemSearch.setVisible(!isAiFolder);
+		}
 	}
 
 	@Override
@@ -1003,6 +1029,16 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 			data.putExtra(DownloadImagesService.LAST_ITEM_ID, highestItemId);
 			data.putExtra(DownloadImagesService.DOWNLOAD_MODE_STRING, DownloadImagesService.DownloadMode.PICTURES_ONLY);
 			DownloadImagesService.enqueueWork(this, data);
+		} else if (itemId == R.id.menu_ai_seed_scores) {
+			seedAiScores();
+			return true;
+		} else if (itemId == R.id.menu_ai_clear_scores) {
+			DatabaseConnectionOrm dbConnAi = new DatabaseConnectionOrm(this);
+			int removed = dbConnAi.aiDebugClearScores();
+			reloadCountNumbersOfSlidingPaneAdapter();
+			updateCurrentRssView();
+			Toast.makeText(this, "Cleared " + removed + " seeded AI scores", Toast.LENGTH_SHORT).show();
+			return true;
 		} else if (itemId == R.id.menu_CreateDatabaseDump) {
 			DatabaseUtilsKt.copyDatabaseToSdCard(this);
 
@@ -1080,6 +1116,21 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
         }
     }
 
+	/**
+	 * Debug-only helper: fabricates AI_SCORE rows for the newest cached articles so the "For you"
+	 * folder has something to render before any model exists. Never reachable in a release build.
+	 */
+	private void seedAiScores() {
+		DatabaseConnectionOrm dbConn = new DatabaseConnectionOrm(this);
+		int selected = dbConn.aiDebugSeedScores(200);
+
+		reloadCountNumbersOfSlidingPaneAdapter();
+		reloadSidebar();
+		updateCurrentRssView();
+
+		Toast.makeText(this, "Seeded AI scores - " + selected + " selected", Toast.LENGTH_SHORT).show();
+	}
+
 	private void DownloadMoreItems() {
 		final NewsReaderDetailFragment ndf = getNewsReaderDetailFragment();
 
@@ -1087,10 +1138,14 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 		if(ndf.getIdFeed() == null) {
 			Long idFolder = ndf.getIdFolder();
 
+			// Anything not in this list falls through to getFolderById(idFolder).getFeedList(),
+			// which returns null for every virtual folder -> NPE. -13 has the same latent bug.
 			List<Integer> specialFolders = Arrays.asList(
 					SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_UNREAD_ITEMS.getValue(),
 					SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_STARRED_ITEMS.getValue(),
-					SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_ITEMS.getValue()
+					SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_ITEMS.getValue(),
+					SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.ALL_DOWNLOADED_PODCASTS.getValue(),
+					SubscriptionExpandableListAdapter.SPECIAL_FOLDERS.AI_FOR_YOU.getValue()
 			);
 			// if a special folder is selected, we can start the sync
 			if (specialFolders.contains(idFolder.intValue())) {
@@ -1282,7 +1337,10 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 					case 1 -> openRssItemInExternalBrowser(currentUrl);
 				}
 
-				((NewsListRecyclerAdapter) getNewsReaderDetailFragment().getRecyclerView().getAdapter()).changeReadStateOfItem(vh, true);
+				NewsListRecyclerAdapter listAdapter = getNewsReaderDetailFragment().getNewsAdapter();
+				if (listAdapter != null) {
+					listAdapter.changeReadStateOfItem(vh, true);
+				}
 			} else {
 				openRssItemInDetailedView(position);
 			}

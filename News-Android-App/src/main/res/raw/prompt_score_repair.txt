@@ -1,0 +1,5 @@
+That was not the required format. Answer again, only lines like:
+
+n|score|tags|why
+
+One line for each of the {{n}} articles, numbers 1 to {{n}}, in order. Nothing else.

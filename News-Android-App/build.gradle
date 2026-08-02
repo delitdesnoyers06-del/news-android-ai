@@ -60,7 +60,7 @@ android {
         }
     }
 
-    flavorDimensions = ["default"]
+    flavorDimensions = ["default", "ml"]
 
     productFlavors {
         // 100% Open-Source Edition
@@ -71,6 +71,25 @@ android {
         dev {
             dimension "default"
             applicationIdSuffix ".dev"
+        }
+
+        // --- on-device AI dimension (docs/ai/PLAN.md D10) ---------------------------------
+        // mlNone must keep today's dependency graph byte-identical: it is the F-Droid / oss
+        // artifact, and PRIVACY.md promises nothing leaves the device. All AI dependencies are
+        // declared with the mlGemmaImplementation configuration so mlNone never resolves them.
+        mlNone {
+            dimension "ml"
+        }
+        // mlGemma carries the two Google binary blobs. arm64-v8a only on real devices:
+        // litertlm-android:0.15.0 ships jni/arm64-v8a + jni/x86_64 and nothing else, so a
+        // universal APK would install on armeabi-v7a and die in System.loadLibrary.
+        // x86_64 is kept solely so connectedAndroidTest can run on an emulator.
+        mlGemma {
+            dimension "ml"
+            applicationIdSuffix ".ai"
+            ndk {
+                abiFilters 'arm64-v8a', 'x86_64'
+            }
         }
     }
 
@@ -84,6 +103,13 @@ android {
     packagingOptions {
         resources {
             excludes += ['META-INF/LICENSE.txt', 'META-INF/NOTICE.txt', 'LICENSE.txt', 'META-INF/services/javax.annotation.processing.Processor']
+            // Both MediaPipe AARs carry an identical ~2.19 MB META-INF/NOTICE.
+            excludes += ['META-INF/NOTICE', 'META-INF/DEPENDENCIES']
+        }
+        jniLibs {
+            // TextSummarizer / TextProofreader JNI (~6.67 MB). TextEmbedder binds
+            // libmediapipe_tasks_jni.so instead, so this one is dead weight.
+            excludes += ['**/libmediapipe_tasks_textgenai_jni.so']
         }
     }
 
@@ -122,6 +148,17 @@ final MOCKITO_VERSION = '5.23.0'
 final RETROFIT_VERSION = '3.0.0'
 
 dependencies {
+    // --- on-device AI, mlGemma flavor only (docs/ai/PLAN.md §4.6) ---------------------
+    // Pinned, never 'latest.release': these Maven modules carry no status metadata, so a
+    // dynamic version would silently pick up 0.16.0-alpha01 the day it lands.
+    mlGemmaImplementation 'com.google.ai.edge.litertlm:litertlm-android:0.15.0'
+    // datatransport is Google Clearcut telemetry; excluding it is what keeps the AI variant
+    // honest about PRIVACY.md. Spike S5 must confirm TextEmbedder still initialises without it.
+    mlGemmaImplementation('com.google.mediapipe:tasks-text:1.0.0') {
+        exclude group: 'com.google.android.datatransport'
+    }
+    mlGemmaImplementation 'androidx.work:work-runtime:2.10.5'
+
     // core android studio module
     // compile project(':core')
     // You must install or update the Google Repository through the SDK manager to use this dependency.

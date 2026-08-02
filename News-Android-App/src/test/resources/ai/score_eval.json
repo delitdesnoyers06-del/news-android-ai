@@ -1,0 +1,116 @@
+{
+  "_comment": "The 12-item eval set from docs/ai/02_product_prompts.md §6, verbatim. 'recorded' is a synthetic model response used by the CI format gate; replace it with a real on-device transcript when hardware is available (the CI gate checks FORMAT, the ship gate checks CALIBRATION and needs a device).",
+  "interests": "- demand-responsive transport (DRT), on-demand buses, dial-a-ride\n- public transport operators and authorities in France and the UK\n- competitors: Via, Padam Mobility, Liftango, Spare Labs\n- EU and national regulation on public transport tenders\n- fleet electrification for buses",
+  "vocabulary": ["drt", "operators", "competitors", "electrification", "competitor", "regulation", "customer"],
+  "items": [
+    {
+      "index": 1,
+      "title": "Via announces expansion of its on-demand service to twelve new US counties",
+      "excerpt": "Via, the transit technology company, today announced… The company says the deployments will begin in Q4 and cover rural areas previously served by fixed routes.",
+      "trap": "press release about a watched company",
+      "bandMin": 2, "bandMax": 3, "expect": 3,
+      "expectTags": ["competitors", "competitor", "drt"],
+      "whyRequired": true
+    },
+    {
+      "index": 2,
+      "title": "The state of European mobility in 2026: a 40-page review",
+      "excerpt": "Our annual review covers micromobility, rail investment, EV charging, MaaS platforms and urban logistics. A short section notes that demand-responsive transport remains a niche in most member states.",
+      "trap": "long article, passing mention",
+      "bandMin": 0, "bandMax": 1, "expect": 1,
+      "expectTags": ["drt"],
+      "whyRequired": false
+    },
+    {
+      "index": 3,
+      "title": "Lincolnshire extends its dial-a-ride contract by two years",
+      "excerpt": "The county council confirmed the extension on Tuesday. The service carried 41,000 passengers last year.",
+      "trap": "short article, entirely on topic",
+      "bandMin": 3, "bandMax": 3, "expect": 3,
+      "expectTags": ["drt", "operators", "customer"],
+      "whyRequired": true
+    },
+    {
+      "index": 4,
+      "title": "Barcelona announces the finalists of its architecture prize",
+      "excerpt": "Six practices remain in contention for the 2026 award. The jury will announce the winner in September.",
+      "trap": "off topic",
+      "bandMin": 0, "bandMax": 0, "expect": 0,
+      "expectTags": [],
+      "whyRequired": false
+    },
+    {
+      "index": 5,
+      "title": "RATP Dev wins Île-de-France contract",
+      "excerpt": "no text available",
+      "trap": "empty excerpt, judgeable title",
+      "bandMin": 1, "bandMax": 3, "expect": 2,
+      "expectTags": ["operators"],
+      "whyRequired": false
+    },
+    {
+      "index": 6,
+      "title": "Ã©Ã©Ã© â€™ 0x1f4a9 ï¿½ï¿½",
+      "excerpt": "ï¿½ï¿½ï¿½ &#8230; &#8230; ï¿½ &lt;p&gt;&lt;/p&gt; ï¿½",
+      "trap": "mojibake / entity soup",
+      "bandMin": 0, "bandMax": 0, "expect": 0,
+      "expectTags": [],
+      "whyRequired": false
+    },
+    {
+      "index": 7,
+      "title": "New EU regulation tightens rules on public transport tender awards",
+      "excerpt": "The regulation, published in the Official Journal, changes how contracting authorities must evaluate operator bids from January. It applies to all PSO contracts above €2m.",
+      "trap": "regulation flag",
+      "bandMin": 3, "bandMax": 3, "expect": 3,
+      "expectTags": ["regulation", "operators"],
+      "whyRequired": true
+    },
+    {
+      "index": 8,
+      "title": "Padam Mobility and Keolis renew their partnership in Occitanie",
+      "excerpt": "The two companies will continue to operate four DRT zones. Keolis said ridership grew 18% year on year.",
+      "trap": "customer + competitor on the same article",
+      "bandMin": 3, "bandMax": 3, "expect": 3,
+      "expectTags": ["competitor", "competitors", "customer", "drt"],
+      "whyRequired": true
+    },
+    {
+      "index": 9,
+      "title": "Paris to add 1,200 e-scooter parking bays",
+      "excerpt": "The city says the bays will reduce pavement clutter. Operators must comply by June.",
+      "trap": "adjacent but out of scope",
+      "bandMin": 0, "bandMax": 1, "expect": 1,
+      "expectTags": ["regulation"],
+      "whyRequired": false
+    },
+    {
+      "index": 10,
+      "title": "On-demand transport is the future, say analysts — and 9 other predictions for 2026",
+      "excerpt": "1. AI everywhere. 2. On-demand transport is the future. 3. Rail returns…",
+      "trap": "listicle: on-topic headline, one-line body",
+      "bandMin": 1, "bandMax": 2, "expect": 1,
+      "expectTags": ["drt"],
+      "whyRequired": false
+    },
+    {
+      "index": 11,
+      "title": "Neue Rufbus-Linie im Landkreis Harburg startet im Februar",
+      "excerpt": "Der Landkreis richtet einen bedarfsgesteuerten Rufbus ein. Das Angebot ersetzt zwei wenig genutzte Linienbusse.",
+      "trap": "on topic, language != device locale",
+      "bandMin": 3, "bandMax": 3, "expect": 3,
+      "expectTags": ["drt", "operators"],
+      "whyRequired": true
+    },
+    {
+      "index": 12,
+      "title": "Our new SaaS platform makes fleet management effortless",
+      "excerpt": "Book a demo today. Trusted by over 400 companies worldwide. Contact sales for pricing.",
+      "trap": "vendor spam with topical keywords",
+      "bandMin": 0, "bandMax": 1, "expect": 0,
+      "expectTags": [],
+      "whyRequired": false
+    }
+  ],
+  "recorded": "Here are the scores:\n1|3|competitors,drt|Via expands the on-demand service you track\n2|1|drt|only a passing mention of on-demand transport\n3|3|drt,operators,customer|Lincolnshire renews a dial-a-ride contract\n4|0|-|architecture prize, nothing to do with transport\n5|2|operators|RATP Dev wins an Ile-de-France contract\n6|0|-|unreadable text\n7|3|regulation,operators|new EU tender rules for operators\n8|3|competitor,customer,drt|Padam and Keolis renew four DRT zones\n9|1|regulation|micromobility, adjacent to your interests\n10|1|drt|listicle, one line on on-demand transport\n11|3|drt,operators|new Rufbus line in Landkreis Harburg\n12|0|-|vendor marketing, no news\n"
+}

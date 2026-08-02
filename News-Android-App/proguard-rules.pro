@@ -113,3 +113,72 @@
 
 # NewsReaderListActivityTests
 -keepclasseswithmembers public class androidx.recyclerview.widget.RecyclerView { *; }
+
+###############################################################################
+# On-device AI (mlGemma flavor). See docs/ai/PLAN.md §4.6.
+#
+# Neither litertlm-android:0.15.0 nor tasks-text:1.0.0 ships a consumer proguard.txt
+# (verified: `unzip -l <aar> | grep -i proguard` is empty), and gradle.properties sets
+# android.r8.strictFullModeForKeepRules=true — under which keeping an interface does NOT
+# keep its implementers. Debug builds pass without these rules; the release build compiles
+# fine and then crashes at runtime. Spike S7 (assembleOssMlGemmaRelease + an on-device
+# smoke run) is the only thing that actually validates this block.
+###############################################################################
+
+# --- LiteRT-LM ---------------------------------------------------------------
+# Native code does FindClass/GetMethodID on these names (strings present in
+# liblitertlm_jni.so), so R8 renaming any of them breaks the JNI bridge.
+-keep class com.google.ai.edge.litertlm.LiteRtLmJni { *; }
+-keep class com.google.ai.edge.litertlm.LiteRtLmJni$* { *; }
+-keep class com.google.ai.edge.litertlm.NativeLibraryLoader { *; }
+-keepclasseswithmembernames,includedescriptorclasses class com.google.ai.edge.litertlm.** {
+    native <methods>;
+}
+-keep class com.google.ai.edge.litertlm.BenchmarkInfo { *; }
+-keep class com.google.ai.edge.litertlm.InputData { *; }
+-keep class com.google.ai.edge.litertlm.InputData$* { *; }
+-keep class com.google.ai.edge.litertlm.LiteRtLmJniException { *; }
+-keep class com.google.ai.edge.litertlm.Message { *; }
+-keep class com.google.ai.edge.litertlm.Content { *; }
+-keep class com.google.ai.edge.litertlm.Content$* { *; }
+-keep class com.google.ai.edge.litertlm.Contents { *; }
+-keep class com.google.ai.edge.litertlm.SamplerConfig { *; }
+-keep class com.google.ai.edge.litertlm.ThinkingConfig { *; }
+-keep class com.google.ai.edge.litertlm.Backend { *; }
+-keep class com.google.ai.edge.litertlm.Backend$* { *; }
+-keep class com.google.ai.edge.litertlm.ResponseFormat { *; }
+-keep class com.google.ai.edge.litertlm.ResponseFormat$* { *; }
+-keep interface com.google.ai.edge.litertlm.MessageCallback { *; }
+-keep interface com.google.ai.edge.litertlm.ResponseCallback { *; }
+# strictFullMode: our own implementers must be named explicitly.
+-keep class de.luhmer.owncloudnewsreader.ai.** implements com.google.ai.edge.litertlm.MessageCallback { *; }
+-dontwarn kotlin.reflect.**
+-keep class kotlin.Metadata { *; }
+
+# --- MediaPipe Tasks (TextEmbedder) ------------------------------------------
+# AutoValue + protolite + JNI; also ships no consumer rules.
+-keep class com.google.mediapipe.** { *; }
+-keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.flogger.**
+# --- datatransport: the no-op stubs, not the real library ---------------------
+# com.google.android.datatransport is EXCLUDED from tasks-text in build.gradle (PRIVACY.md), but
+# MediaPipe reaches TransportRuntime.initialize() unconditionally from
+# TextEmbedder.createFromOptions, so src/mlGemma/java/com/google/android/datatransport/ supplies
+# that API as no-ops. Read the package-info there before touching any of this.
+#
+# The stubs are referenced from RemoteLoggingClient, which the -keep above already retains, so R8
+# would keep them anyway; naming them explicitly is documentation and insurance against the day
+# the MediaPipe keep rule is narrowed. It is nine tiny classes.
+-keep class com.google.android.datatransport.** { *; }
+# Retained for the members of the real API that our stubs deliberately do NOT provide (Priority,
+# ProductData, TransportScheduleCallback, the 3-arg getTransport, ...): nothing on the reachable
+# path references them, and a warning about them is not actionable.
+-dontwarn com.google.android.datatransport.**
+
+# --- Gson DTOs for the model catalogue ---------------------------------------
+-keep class de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry { *; }
+-keep class de.luhmer.owncloudnewsreader.ai.model.AiPartMeta { *; }
+
+# -keepattributes APPENDS across rule files, so this does not disturb line 75.
+-keepattributes RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations,AnnotationDefault,Signature,InnerClasses,EnclosingMethod

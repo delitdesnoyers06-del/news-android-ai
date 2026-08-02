@@ -148,7 +148,7 @@ public class NewsReaderListActivityUiTests {
 
         NewsReaderDetailFragment ndf = (NewsReaderDetailFragment) waitForFragment(R.id.content_frame, 5000);
         assertNotNull(ndf);
-        final NewsListRecyclerAdapter na = (NewsListRecyclerAdapter) ndf.getRecyclerView().getAdapter();
+        final NewsListRecyclerAdapter na = ndf.getNewsAdapter();
         assertNotNull(na);
         final RssItemViewHolder vh = (RssItemViewHolder) ndf.getRecyclerView().getChildViewHolder(ndf.getRecyclerView().getLayoutManager().findViewByPosition(scrollPosition));
         assertNotNull(vh);

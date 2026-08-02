@@ -110,6 +110,8 @@ public class RssItemObservable implements Publisher<Integer> {
 
     public void sync(Subscriber<? super Integer> subscriber) throws IOException {
         mDbConn.clearDatabaseOverSize();
+        // Right after the article prune: that is what creates the orphaned AI rows.
+        mDbConn.aiGarbageCollect();
 
         long lastModified = mDbConn.getLastModified();
 
