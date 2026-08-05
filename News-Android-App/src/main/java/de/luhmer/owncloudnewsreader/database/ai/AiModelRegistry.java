@@ -21,6 +21,18 @@ public class AiModelRegistry {
 
     public static final String KIND_LLM = "llm";
     public static final String KIND_EMBEDDER = "embedder";
+    public static final String KIND_TTS = "tts";
+
+    /** Maps a catalogue entry's {@code purpose} to the {@code KIND} column value. */
+    public static String kindFor(de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry e) {
+        if (e.isLlm()) {
+            return KIND_LLM;
+        }
+        if (e.isTts()) {
+            return KIND_TTS;
+        }
+        return KIND_EMBEDDER;
+    }
 
     public static final String STATE_ABSENT = "absent";
     public static final String STATE_PARTIAL = "partial";

@@ -111,9 +111,15 @@ public class AiModelAdapter extends RecyclerView.Adapter<AiModelAdapter.Holder> 
         final AiCatalogEntry e = s.entry;
         h.name.setText(e.displayName);
         String size = Formatter.formatShortFileSize(context, e.sizeBytes);
-        h.purpose.setText(e.isLlm()
-                ? context.getString(R.string.ai_model_purpose_triage, size)
-                : context.getString(R.string.ai_model_purpose_similarity, size));
+        final int purposeRes;
+        if (e.isLlm()) {
+            purposeRes = R.string.ai_model_purpose_triage;
+        } else if (e.isTts()) {
+            purposeRes = R.string.ai_model_purpose_voice;
+        } else {
+            purposeRes = R.string.ai_model_purpose_similarity;
+        }
+        h.purpose.setText(context.getString(purposeRes, size));
 
         long[] progress = live.get(e.id);
         boolean downloading = progress != null;

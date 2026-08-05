@@ -15,9 +15,25 @@ public class AiCatalogEntry {
 
     public static final String PURPOSE_LLM = "llm";
     public static final String PURPOSE_EMBEDDER = "embedder";
+    /** Neural text-to-speech, run by sherpa-onnx in the {@code mlGemma} flavor. */
+    public static final String PURPOSE_TTS = "tts";
 
     public static final String SOURCE_HF = "hf";
     public static final String SOURCE_URL = "url";
+
+    // ---- TTS engine kinds (only meaningful when purpose == PURPOSE_TTS) --------------------
+    public static final String TTS_ENGINE_VITS = "vits";
+    public static final String TTS_ENGINE_KOKORO = "kokoro";
+    public static final String TTS_ENGINE_MATCHA = "matcha";
+
+    /** A single extra file a model needs next to its archive, e.g. a Matcha vocoder. */
+    public static class Companion {
+        /** Full https URL of the file. */
+        public String url;
+        /** Name to save it as, inside the unpacked model root. */
+        public String fileName;
+        public long sizeBytes;
+    }
 
     /** Stable id. This is what {@code sp_ai_model_*} and {@code AI_MODEL.MODEL_ID} store. */
     public String id;
@@ -47,12 +63,41 @@ public class AiCatalogEntry {
     public int defaultMaxNumTokens;
     public String licenseUrl;
 
+    // ---- TTS-only fields (null/0 for every other purpose) ---------------------------------
+    /** {@link #TTS_ENGINE_VITS}, {@link #TTS_ENGINE_KOKORO} or {@link #TTS_ENGINE_MATCHA}. */
+    public String ttsEngine;
+    /** Number of selectable speakers/voices the model ships with. */
+    public int numSpeakers;
+    /** Extra files fetched next to the archive after it is unpacked (e.g. a Matcha vocoder). */
+    public java.util.List<Companion> companions;
+
     public boolean isLlm() {
         return PURPOSE_LLM.equals(purpose);
     }
 
     public boolean isEmbedder() {
         return PURPOSE_EMBEDDER.equals(purpose);
+    }
+
+    public boolean isTts() {
+        return PURPOSE_TTS.equals(purpose);
+    }
+
+    /** True when {@link #fileName} is a {@code .tar.bz2} archive that must be unpacked. */
+    public boolean isArchive() {
+        return fileName != null && fileName.endsWith(".tar.bz2");
+    }
+
+    /**
+     * The directory name the sherpa-onnx archive unpacks into: its own file name with the
+     * {@code .tar.bz2} suffix removed. {@code kokoro-int8-multi-lang-v1_1.tar.bz2} unpacks into a
+     * {@code kokoro-int8-multi-lang-v1_1/} folder.
+     */
+    public String unpackRootName() {
+        if (fileName == null) {
+            return "";
+        }
+        return isArchive() ? fileName.substring(0, fileName.length() - ".tar.bz2".length()) : fileName;
     }
 
     /**

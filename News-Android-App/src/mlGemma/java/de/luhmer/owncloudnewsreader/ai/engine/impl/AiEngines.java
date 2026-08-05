@@ -3,11 +3,14 @@ package de.luhmer.owncloudnewsreader.ai.engine.impl;
 import android.content.Context;
 
 import java.io.File;
+import java.io.IOException;
 
 import de.luhmer.owncloudnewsreader.ai.engine.AiEmbedder;
 import de.luhmer.owncloudnewsreader.ai.engine.AiException;
 import de.luhmer.owncloudnewsreader.ai.engine.AiLlm;
 import de.luhmer.owncloudnewsreader.ai.engine.AiModelInfo;
+import de.luhmer.owncloudnewsreader.ai.engine.AiTts;
+import de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec;
 
 /**
  * The {@code mlGemma} half of the flavor seam: this class exists twice at the same fully-qualified
@@ -43,5 +46,23 @@ public final class AiEngines {
      */
     public static AiLlm openLlm(AiModelInfo info, File cacheDir, boolean gpu) throws AiException {
         return LiteRtLlm.open(info, cacheDir, gpu);
+    }
+
+    /** True in this flavor: sherpa-onnx is on the classpath (bundled AAR, see {@code libs/}). */
+    public static boolean ttsSupported() {
+        return true;
+    }
+
+    /** Loads a neural voice. Blocking; call off the main thread. */
+    public static AiTts openTts(AiTtsSpec spec) throws AiException {
+        return SherpaTts.open(spec);
+    }
+
+    /**
+     * Unpacks a sherpa-onnx {@code .tar.bz2} model. Only this flavor carries commons-compress; the
+     * download service that calls it is declared in the mlGemma manifest only.
+     */
+    public static void extractTarBz2(File archive, File destDir) throws IOException {
+        SherpaTts.extractTarBz2(archive, destDir);
     }
 }

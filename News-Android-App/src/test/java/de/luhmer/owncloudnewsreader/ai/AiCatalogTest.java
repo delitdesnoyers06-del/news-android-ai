@@ -45,7 +45,7 @@ public class AiCatalogTest {
             assertTrue("size must be pinned for " + e.id, e.sizeBytes > 0);
             assertTrue("minTotalRamBytes is a data field, not a formula: " + e.id,
                     e.minTotalRamBytes > 0);
-            assertTrue(e.isLlm() || e.isEmbedder());
+            assertTrue(e.isLlm() || e.isEmbedder() || e.isTts());
             if (AiCatalogEntry.SOURCE_HF.equals(e.source)) {
                 assertNotNull(e.repo);
                 assertTrue(e.downloadUrl().startsWith("https://huggingface.co/" + e.repo
@@ -128,6 +128,37 @@ public class AiCatalogTest {
                 assertTrue(e.id + " must be verifiable", e.hasChecksum());
             }
         }
+    }
+
+    @Test
+    public void ttsVoicesAreWellFormedArchivesWithAnEngine() {
+        java.util.List<AiCatalogEntry> voices = catalog().ttsModels();
+        assertEquals(4, voices.size());
+        boolean sawKokoro = false;
+        boolean sawMatcha = false;
+        for (AiCatalogEntry e : voices) {
+            assertTrue(e.id + " must be a tts purpose", e.isTts());
+            assertNotNull(e.id + " needs an engine", e.ttsEngine);
+            assertTrue(e.id + " ships as a .tar.bz2", e.isArchive());
+            // the unpack folder is the archive name without the suffix
+            assertFalse(e.unpackRootName().endsWith(".tar.bz2"));
+            assertEquals(e.fileName.substring(0, e.fileName.length() - ".tar.bz2".length()),
+                    e.unpackRootName());
+            assertEquals(de.luhmer.owncloudnewsreader.database.ai.AiModelRegistry.KIND_TTS,
+                    de.luhmer.owncloudnewsreader.database.ai.AiModelRegistry.kindFor(e));
+            if (AiCatalogEntry.TTS_ENGINE_KOKORO.equals(e.ttsEngine)) {
+                sawKokoro = true;
+            }
+            if (AiCatalogEntry.TTS_ENGINE_MATCHA.equals(e.ttsEngine)) {
+                sawMatcha = true;
+                assertNotNull("Matcha needs its vocoder companion", e.companions);
+                assertEquals(1, e.companions.size());
+                assertNotNull(e.companions.get(0).url);
+                assertTrue(e.companions.get(0).sizeBytes > 0);
+            }
+        }
+        assertTrue("Kokoro is the quality pick", sawKokoro);
+        assertTrue("Matcha is in the top set", sawMatcha);
     }
 
     @Test

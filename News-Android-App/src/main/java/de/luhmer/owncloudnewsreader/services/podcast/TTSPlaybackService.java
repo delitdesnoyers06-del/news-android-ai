@@ -1,6 +1,7 @@
 package de.luhmer.owncloudnewsreader.services.podcast;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -29,13 +30,29 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
 
     private static final String UTTERANCE_PREFIX = "tts_";
 
+    // TextToSpeech has no millisecond timeline, so the progress bar is driven on a character scale:
+    // a fixed ms-per-character, interpolated within the current chunk by wall clock. Only the ratio
+    // position/duration matters to the bar; the constant keeps the time display plausible too.
+    private static final int MS_PER_CHAR = 62;
+
     private TextToSpeech ttsController;
     private List<String> chunks;
     private int currentChunk;
     private String lastUtteranceId;
 
+    // Progress timeline, computed once up front so getTotalDuration() is non-zero from the start
+    // (updateMetadata reads it before the async engine init has produced a single sound).
+    private int[] prefixChars;
+    private int totalChars = 1;
+    private volatile float speechRate = 1.0f;
+    private volatile long chunkStartUptimeMs;
+
     public TTSPlaybackService(Context context, PodcastStatusListener podcastStatusListener, MediaItem mediaItem) {
         super(podcastStatusListener, mediaItem);
+
+        // Split up front (pure, no engine needed) so the timeline exists before onInit runs.
+        chunks = TtsTextSplitter.split(((TTSItem) mediaItem).text, CHUNK_SIZE);
+        computeTimeline();
 
         try {
             ttsController = new TextToSpeech(context, this);
@@ -47,6 +64,8 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
                     public void onStart(String utteranceId) {
                         // Remember the piece we are on so play() can resume here after a pause
                         currentChunk = indexOf(utteranceId);
+                        // Anchor the within-chunk interpolation used by getCurrentPosition().
+                        chunkStartUptimeMs = SystemClock.uptimeMillis();
                     }
 
                     @Override
@@ -101,6 +120,7 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
     @Override
     public void playbackSpeedChanged(float currentPlaybackSpeed) {
         ttsController.setSpeechRate(currentPlaybackSpeed);
+        this.speechRate = currentPlaybackSpeed <= 0f ? 1.0f : currentPlaybackSpeed;
     }
 
     @Override
@@ -110,10 +130,7 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
             // engine and voice through the system TTS settings shortcut in the app settings.
             ttsController.setLanguage(Locale.getDefault());
 
-            String text = ((TTSItem) getMediaItem()).text;
-            chunks = TtsTextSplitter.split(text, CHUNK_SIZE);
-
-            if (chunks.isEmpty()) {
+            if (chunks == null || chunks.isEmpty()) {
                 setStatus(PlaybackStateCompat.STATE_ERROR);
                 return;
             }
@@ -138,6 +155,49 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
             }
         }
         setStatus(PlaybackStateCompat.STATE_PLAYING);
+    }
+
+    private void computeTimeline() {
+        prefixChars = new int[Math.max(1, chunks.size())];
+        int sum = 0;
+        for (int i = 0; i < chunks.size(); i++) {
+            prefixChars[i] = sum;
+            sum += chunks.get(i).length();
+        }
+        totalChars = Math.max(1, sum);
+    }
+
+    /**
+     * Non-zero from construction (see {@link #totalChars}); read by {@code updateMetadata} as
+     * {@code METADATA_KEY_DURATION} to set the bar's maximum.
+     */
+    @Override
+    public int getTotalDuration() {
+        return totalChars * MS_PER_CHAR;
+    }
+
+    /**
+     * Characters spoken so far on the same scale as {@link #getTotalDuration()}: the offset of the
+     * current chunk, plus a wall-clock estimate of how far into that chunk the engine has read. Steps
+     * per chunk would look frozen for long sentences, so the within-chunk fraction is interpolated.
+     */
+    @Override
+    public int getCurrentPosition() {
+        if (prefixChars == null || chunks == null || chunks.isEmpty()) {
+            return 0;
+        }
+        int idx = Math.min(currentChunk, prefixChars.length - 1);
+        int base = prefixChars[idx];
+        int chunkLen = idx < chunks.size() ? chunks.get(idx).length() : 0;
+        float fraction = 0f;
+        if (getStatus() == PlaybackStateCompat.STATE_PLAYING && chunkLen > 0) {
+            long estMs = (long) (chunkLen * MS_PER_CHAR / Math.max(0.25f, speechRate));
+            if (estMs > 0) {
+                long elapsed = SystemClock.uptimeMillis() - chunkStartUptimeMs;
+                fraction = Math.max(0f, Math.min(1f, elapsed / (float) estMs));
+            }
+        }
+        return (int) ((base + fraction * chunkLen) * (long) MS_PER_CHAR);
     }
 
     private int indexOf(String utteranceId) {

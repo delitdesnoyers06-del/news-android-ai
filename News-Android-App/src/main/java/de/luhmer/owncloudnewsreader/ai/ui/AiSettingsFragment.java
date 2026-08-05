@@ -65,6 +65,13 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
+        Preference manageVoices = findPreference(SettingsActivity.PREF_AI_MANAGE_VOICES);
+        if (manageVoices != null) {
+            manageVoices.setOnPreferenceClickListener(p -> {
+                startActivity(new Intent(requireContext(), AiModelManagerActivity.class));
+                return true;
+            });
+        }
         bindInterests();
         bindDiagnostics();
     }
@@ -266,6 +273,7 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
             return;
         }
         bindTriagePicker(repo);
+        bindTtsControls(repo);
         bindEmbedderStatus(repo);
         bindManageSummary(repo);
         bindTierOnlyRows();
@@ -317,6 +325,69 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
             preference.setSummary(((ListPreference) preference).getEntry());
             return true;
         });
+    }
+
+    /**
+     * The "AI voice" switch and its voice picker. The picker lists <b>ready</b> voices only (archive
+     * downloaded and unpacked); the switch stays off and disabled until at least one exists, so it can
+     * never be turned on into silence. The engine toggle is also hidden where this build cannot run a
+     * neural voice at all ({@code mlNone}).
+     */
+    private void bindTtsControls(AiModelRepository repo) {
+        boolean supported =
+                de.luhmer.owncloudnewsreader.ai.engine.impl.AiEngines.ttsSupported();
+
+        List<CharSequence> labels = new ArrayList<>();
+        List<CharSequence> values = new ArrayList<>();
+        for (AiCatalogEntry e : repo.catalog().ttsModels()) {
+            if (repo.isTtsReady(e)) {
+                labels.add(e.displayName);
+                values.add(e.id);
+            }
+        }
+        boolean anyReady = !labels.isEmpty();
+
+        androidx.preference.SwitchPreference engine =
+                findPreference(SettingsActivity.CB_AI_TTS_ENGINE);
+        if (engine != null) {
+            engine.setVisible(supported);
+            engine.setEnabled(supported && anyReady);
+            if (supported && !anyReady) {
+                engine.setChecked(false);
+                engine.setSummary(R.string.pref_summary_ai_tts_no_voice);
+            } else {
+                engine.setSummary(R.string.pref_summary_ai_tts_engine);
+            }
+        }
+
+        ListPreference picker = findPreference(SettingsActivity.SP_AI_TTS_MODEL);
+        if (picker != null) {
+            picker.setVisible(supported);
+            if (!anyReady) {
+                picker.setEnabled(false);
+                picker.setSummary(R.string.pref_summary_ai_no_model);
+                picker.setEntries(new CharSequence[0]);
+                picker.setEntryValues(new CharSequence[0]);
+            } else {
+                picker.setEnabled(true);
+                picker.setEntries(labels.toArray(new CharSequence[0]));
+                picker.setEntryValues(values.toArray(new CharSequence[0]));
+                if (picker.getValue() == null || picker.getEntry() == null) {
+                    picker.setValue(values.get(0).toString());
+                }
+                picker.setSummary(picker.getEntry());
+                picker.setOnPreferenceChangeListener((preference, newValue) -> {
+                    ((ListPreference) preference).setValue(String.valueOf(newValue));
+                    preference.setSummary(((ListPreference) preference).getEntry());
+                    return true;
+                });
+            }
+        }
+
+        Preference manageVoices = findPreference(SettingsActivity.PREF_AI_MANAGE_VOICES);
+        if (manageVoices != null) {
+            manageVoices.setVisible(supported);
+        }
     }
 
     /** A status row, not a picker (PLAN D21): there is exactly one embedder and never a second. */

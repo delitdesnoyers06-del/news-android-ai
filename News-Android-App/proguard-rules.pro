@@ -178,6 +178,7 @@
 
 # --- Gson DTOs for the model catalogue ---------------------------------------
 -keep class de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry { *; }
+-keep class de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry$Companion { *; }
 -keep class de.luhmer.owncloudnewsreader.ai.model.AiPartMeta { *; }
 
 # -keepattributes APPENDS across rule files, so this does not disturb line 75.

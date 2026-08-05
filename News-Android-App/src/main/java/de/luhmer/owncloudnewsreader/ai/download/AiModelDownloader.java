@@ -163,6 +163,56 @@ public final class AiModelDownloader {
         return new Outcome(CODE_OK, null, entry.sizeBytes, 200);
     }
 
+    /**
+     * Downloads a single plain file (a TTS companion such as a Matcha vocoder) to {@code dest}. No
+     * resume and no sidecar — companions are small next to the archive they accompany. Verified by
+     * size only when {@code expectedSize > 0}.
+     */
+    public Outcome downloadCompanion(String url, File dest, long expectedSize,
+                                     CancelToken token, Progress progress) {
+        File parent = dest.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+            return new Outcome(CODE_IO, "cannot create " + parent, 0L, 0);
+        }
+        Request req = new Request.Builder().url(url).build();
+        try (Response r = client.newCall(req).execute()) {
+            if (!r.isSuccessful()) {
+                return new Outcome(CODE_NETWORK, "HTTP " + r.code(), 0L, r.code());
+            }
+            ResponseBody body = r.body();
+            if (body == null) {
+                return new Outcome(CODE_NETWORK, "empty body", 0L, r.code());
+            }
+            long received = 0L;
+            try (InputStream in = body.byteStream();
+                 FileOutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[BUFFER];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                    received += n;
+                    if (progress != null) {
+                        progress.onProgress(dest.getName(), received, expectedSize);
+                    }
+                    if (token != null && token.isCancelled()) {
+                        deleteQuietly(dest);
+                        return new Outcome(CODE_CANCELLED, token.reason(), received, 0);
+                    }
+                }
+                out.flush();
+            }
+            if (expectedSize > 0 && dest.length() != expectedSize) {
+                deleteQuietly(dest);
+                return new Outcome(CODE_SIZE_MISMATCH,
+                        dest.length() + " bytes, expected " + expectedSize, dest.length(), 0);
+            }
+            return new Outcome(CODE_OK, null, dest.length(), 200);
+        } catch (IOException | RuntimeException e) {
+            deleteQuietly(dest);
+            return new Outcome(CODE_NETWORK, String.valueOf(e.getMessage()), 0L, 0);
+        }
+    }
+
     private Outcome transfer(AiCatalogEntry entry, File part, File sidecar, AiPartMeta meta,
                              long startAt, String hfToken, CancelToken token, Progress progress) {
         long received = startAt;

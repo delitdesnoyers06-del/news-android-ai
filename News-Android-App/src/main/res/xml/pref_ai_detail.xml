@@ -62,6 +62,30 @@
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="@string/pref_header_ai_tts" app:iconSpaceReserved="false">
+
+        <SwitchPreference
+            android:key="cb_ai_tts_engine"
+            android:title="@string/pref_title_ai_tts_engine"
+            android:summary="@string/pref_summary_ai_tts_engine"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:key="sp_ai_tts_model"
+            android:title="@string/pref_title_ai_tts_model"
+            android:defaultValue=""
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="pref_ai_manage_voices"
+            android:title="@string/pref_title_ai_manage_voices"
+            android:summary="@string/pref_summary_ai_manage_voices"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/pref_header_ai_when" app:iconSpaceReserved="false">
 
         <ListPreference

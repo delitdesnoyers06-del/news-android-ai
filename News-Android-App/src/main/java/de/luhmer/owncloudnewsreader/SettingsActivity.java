@@ -129,6 +129,16 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String PREF_AI_DELETE_MODELS = "pref_ai_delete_models";
     public static final String EDT_AI_HF_TOKEN = "edt_ai_hf_token";
 
+    // ---- reading (text-to-speech) ----
+    /** On = use a downloaded neural voice; off = the system Android TextToSpeech engine. */
+    public static final String CB_AI_TTS_ENGINE = "cb_ai_tts_engine";
+    /** Catalogue id of the selected neural voice. */
+    public static final String SP_AI_TTS_MODEL = "sp_ai_tts_model";
+    /** Speaker/voice index within the selected model (multi-speaker models only). */
+    public static final String SP_AI_TTS_SPEAKER = "sp_ai_tts_speaker";
+    /** Opens the model manager to download/delete neural voices. */
+    public static final String PREF_AI_MANAGE_VOICES = "pref_ai_manage_voices";
+
     public static final String SP_AI_RUN_TRIGGER = "sp_ai_run_trigger";
     public static final String SP_AI_BATCH_BUDGET = "sp_ai_batch_budget";
     public static final String CB_AI_ANALYZE_ALL_UNREAD_WHILE_CHARGING =

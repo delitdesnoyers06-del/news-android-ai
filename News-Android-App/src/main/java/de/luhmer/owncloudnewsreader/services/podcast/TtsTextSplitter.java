@@ -11,6 +11,14 @@ import java.util.List;
  */
 public final class TtsTextSplitter {
 
+    /**
+     * Sentence-ish chunk size used when there is no engine input-length limit to respect (the neural
+     * TTS path). Kept small so the first sentence starts playing quickly and so it stays clear of
+     * multi-byte scripts. The native {@code TextToSpeech} path caps this against
+     * {@code getMaxSpeechInputLength()} as well.
+     */
+    public static final int DEFAULT_CHUNK_SIZE = 200;
+
     private TtsTextSplitter() { }
 
     public static List<String> split(String text, int maxLen) {

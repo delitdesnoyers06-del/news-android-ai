@@ -60,6 +60,7 @@ import de.luhmer.owncloudnewsreader.events.podcast.WindPodcast;
 import de.luhmer.owncloudnewsreader.model.MediaItem;
 import de.luhmer.owncloudnewsreader.model.PodcastFeedItem;
 import de.luhmer.owncloudnewsreader.model.PodcastItem;
+import de.luhmer.owncloudnewsreader.SettingsActivity;
 import de.luhmer.owncloudnewsreader.model.TTSItem;
 import de.luhmer.owncloudnewsreader.services.podcast.MediaPlayerPlaybackService;
 import de.luhmer.owncloudnewsreader.services.podcast.PlaybackService;
@@ -322,7 +323,12 @@ public class PodcastPlaybackService extends MediaBrowserServiceCompat {
                 mPlaybackService = new MediaPlayerPlaybackService(this, podcastStatusListener, mediaItem);
             //}
         } else if (mediaItem instanceof TTSItem) {
-            mPlaybackService = new TTSPlaybackService(this, podcastStatusListener, mediaItem);
+            if (useAiTts()) {
+                mPlaybackService = new de.luhmer.owncloudnewsreader.services.podcast
+                        .AiTtsPlaybackService(this, podcastStatusListener, mediaItem);
+            } else {
+                mPlaybackService = new TTSPlaybackService(this, podcastStatusListener, mediaItem);
+            }
         }
 
         updateMetadata(mediaItem);
@@ -337,6 +343,29 @@ public class PodcastPlaybackService extends MediaBrowserServiceCompat {
         requestAudioFocus();
 
         return super.onStartCommand(intent, flags, startId);
+    }
+
+    /**
+     * True when the reader turned on "AI voice" <b>and</b> this build can run it <b>and</b> a voice
+     * is actually downloaded. Any of those missing falls back to the system {@link TTSPlaybackService}
+     * — the switch never leaves the reader with silence.
+     */
+    private boolean useAiTts() {
+        try {
+            if (!de.luhmer.owncloudnewsreader.ai.engine.impl.AiEngines.ttsSupported()) {
+                return false;
+            }
+            android.content.SharedPreferences prefs =
+                    de.luhmer.owncloudnewsreader.ai.AiFeature.prefsOf(this);
+            if (!prefs.getBoolean(SettingsActivity.CB_AI_TTS_ENGINE, false)) {
+                return false;
+            }
+            return new de.luhmer.owncloudnewsreader.ai.download.AiModelRepository(this)
+                    .hasAnyReadyTts();
+        } catch (Throwable t) {
+            Log.w(TAG, "AI TTS availability check failed; using system TTS", t);
+            return false;
+        }
     }
 
     private void updateMetadata(MediaItem mediaItem) {

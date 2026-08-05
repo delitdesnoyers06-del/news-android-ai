@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat;
 
 import org.greenrobot.eventbus.EventBus;
 
+import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,6 +29,7 @@ import de.luhmer.owncloudnewsreader.ai.AiCapability;
 import de.luhmer.owncloudnewsreader.ai.AiFeature;
 import de.luhmer.owncloudnewsreader.ai.engine.AiModelInfo;
 import de.luhmer.owncloudnewsreader.ai.engine.CancelToken;
+import de.luhmer.owncloudnewsreader.ai.engine.impl.AiEngines;
 import de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.ai.AiDb;
@@ -136,15 +138,18 @@ public class AiModelDownloadService extends Service {
                     AiModelDownloader.CODE_IO, "unknown model"));
             return;
         }
-        if (!AiCapability.downloadOk(this, entry.sizeBytes)) {
+        // A TTS archive is kept AND unpacked (~2x), plus any companion files, so it needs headroom
+        // beyond the download itself.
+        long requiredBytes = entry.isTts()
+                ? entry.sizeBytes * 3 + companionBytes(entry) : entry.sizeBytes;
+        if (!AiCapability.downloadOk(this, requiredBytes)) {
             post(new AiModelDownloadEvent(modelId, AiModelDownloadEvent.Phase.FAILED, 0,
                     entry.sizeBytes, AiModelDownloader.CODE_NO_SPACE, null));
             return;
         }
         AiModelRegistry registry = db == null ? null : new AiModelRegistry(db);
         if (registry != null) {
-            registry.register(entry.id, entry.isLlm()
-                    ? AiModelRegistry.KIND_LLM : AiModelRegistry.KIND_EMBEDDER,
+            registry.register(entry.id, AiModelRegistry.kindFor(entry),
                     entry.sizeBytes, entry.sha256);
             registry.setState(entry.id, AiModelRegistry.STATE_PARTIAL, null, null);
         }
@@ -188,6 +193,24 @@ public class AiModelDownloadService extends Service {
             registry.setProgress(entry.id, entry.sizeBytes, entry.sizeBytes, null);
         }
 
+        if (entry.isTts()) {
+            // The archive is verified and on disk; now unpack it and fetch companions so the voice
+            // is actually usable. Its own "Preparing model…" line, since bzip2 of ~150 MB is slow.
+            post(new AiModelDownloadEvent(entry.id, AiModelDownloadEvent.Phase.PREPARING,
+                    entry.sizeBytes, entry.sizeBytes, null, null));
+            goForeground(entry.id, entry.sizeBytes, entry.sizeBytes,
+                    getString(R.string.ai_model_preparing));
+            String err = prepareTts(repo, entry);
+            if (err != null) {
+                if (registry != null) {
+                    registry.setState(entry.id, AiModelRegistry.STATE_BROKEN, null, err);
+                }
+                post(new AiModelDownloadEvent(entry.id, AiModelDownloadEvent.Phase.FAILED,
+                        entry.sizeBytes, entry.sizeBytes, AiModelDownloader.CODE_IO, err));
+                return;
+            }
+        }
+
         if (entry.isLlm()) {
             // The 180 s smoke load, with its own notification line so the wait is explained.
             post(new AiModelDownloadEvent(entry.id, AiModelDownloadEvent.Phase.PREPARING,
@@ -207,6 +230,72 @@ public class AiModelDownloadService extends Service {
         }
         post(new AiModelDownloadEvent(entry.id, AiModelDownloadEvent.Phase.INSTALLED,
                 entry.sizeBytes, entry.sizeBytes, null, null));
+    }
+
+    private static long companionBytes(AiCatalogEntry entry) {
+        long total = 0L;
+        if (entry.companions != null) {
+            for (AiCatalogEntry.Companion c : entry.companions) {
+                total += Math.max(0L, c.sizeBytes);
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Unpacks the verified {@code .tar.bz2} into {@code unpacked/} and downloads any companion files
+     * next to it, then writes the done-marker. Idempotent: a re-run wipes a half-unpacked tree first.
+     *
+     * @return {@code null} on success, else a human-readable failure reason
+     */
+    private String prepareTts(AiModelRepository repo, AiCatalogEntry entry) {
+        try {
+            File archive = repo.fileFor(entry);
+            File root = repo.unpackedRoot(entry);
+            File unpackParent = root.getParentFile();      // <id>/<rev>/unpacked
+            deleteRecursively(unpackParent);
+            if (unpackParent != null && !unpackParent.mkdirs()) {
+                return "cannot create " + unpackParent;
+            }
+            AiEngines.extractTarBz2(archive, unpackParent);
+            if (!root.isDirectory()) {
+                return "archive did not contain " + entry.unpackRootName();
+            }
+            if (entry.companions != null) {
+                AiModelDownloader downloader = new AiModelDownloader();
+                for (AiCatalogEntry.Companion c : entry.companions) {
+                    File dest = new File(root, c.fileName);
+                    AiModelDownloader.Outcome outcome = downloader.downloadCompanion(
+                            c.url, dest, c.sizeBytes, token,
+                            (id, received, total) ->
+                                    post(AiModelDownloadEvent.progress(entry.id, received, total)));
+                    if (!outcome.ok()) {
+                        return "companion " + c.fileName + ": " + outcome.code;
+                    }
+                }
+            }
+            File marker = new File(root, AiModelRepository.UNPACK_DONE_MARKER);
+            //noinspection ResultOfMethodCallIgnored
+            new java.io.FileOutputStream(marker).close();
+            return null;
+        } catch (Throwable t) {
+            Log.e(TAG, "unpack failed for " + entry.id, t);
+            return String.valueOf(t.getMessage());
+        }
+    }
+
+    private static void deleteRecursively(File f) {
+        if (f == null || !f.exists()) {
+            return;
+        }
+        File[] kids = f.listFiles();
+        if (kids != null) {
+            for (File kid : kids) {
+                deleteRecursively(kid);
+            }
+        }
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
     }
 
     private String hfToken() {
