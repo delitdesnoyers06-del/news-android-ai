@@ -42,7 +42,14 @@ public class AiTtsPlaybackService extends PlaybackService {
 
     /** Rough speaking rate: ~16 chars/s at speed 1.0. Only the ratio matters for the progress bar. */
     static final int MS_PER_CHAR = 62;
-    private static final int QUEUE_CAPACITY = 2;
+    // Larger than the native splitter's 200: each neural synth call has fixed overhead, so longer
+    // chunks mean fewer calls and more audio per call — the synthesiser stays ahead of playback and
+    // the reading does not stutter between sentences. Still small enough that the first sentence
+    // starts within a second or two.
+    private static final int CHUNK_SIZE = 400;
+    // Prefetch depth: how many synthesised chunks may wait ahead of the one playing. Deep enough to
+    // ride out a slow synth (e.g. the heavier Kokoro model) without the AudioTrack starving.
+    private static final int QUEUE_CAPACITY = 6;
 
     private final Context context;
     private final List<String> chunks;
@@ -68,7 +75,7 @@ public class AiTtsPlaybackService extends PlaybackService {
         super(listener, mediaItem);
         this.context = context.getApplicationContext();
         String text = ((TTSItem) mediaItem).text;
-        this.chunks = TtsTextSplitter.split(text, TtsTextSplitter.DEFAULT_CHUNK_SIZE);
+        this.chunks = TtsTextSplitter.split(text, CHUNK_SIZE);
         this.prefixChars = new int[Math.max(1, chunks.size())];
         int sum = 0;
         for (int i = 0; i < chunks.size(); i++) {
@@ -182,6 +189,10 @@ public class AiTtsPlaybackService extends PlaybackService {
         if (minBuf <= 0) {
             minBuf = sampleRate * 4;      // one second of float mono as a fallback
         }
+        // A generous track buffer (~2 s of float mono) so a slow neural synth (Kokoro) cannot
+        // starve the track between chunks — an underrun on some devices plays back as hiss, not
+        // just a gap. Paired with the prefetch queue this keeps playback continuous and clean.
+        int bufBytes = Math.max(minBuf * 4, sampleRate * 2 * 4);
         try {
             AudioTrack track = new AudioTrack.Builder()
                     .setAudioAttributes(new AudioAttributes.Builder()
@@ -193,7 +204,7 @@ public class AiTtsPlaybackService extends PlaybackService {
                             .setSampleRate(sampleRate)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .build())
-                    .setBufferSizeInBytes(minBuf * 2)
+                    .setBufferSizeInBytes(bufBytes)
                     .setTransferMode(AudioTrack.MODE_STREAM)
                     .build();
             audioTrack = track;

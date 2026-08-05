@@ -176,9 +176,9 @@
       "licenseUrl": "https://github.com/k2-fsa/sherpa-onnx",
       "companions": [
         {
-          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx",
-          "fileName": "vocos-22khz-univ.onnx",
-          "sizeBytes": 53884024
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/hifigan_v2.onnx",
+          "fileName": "hifigan_v2.onnx",
+          "sizeBytes": 3749714
         }
       ]
     },
@@ -213,6 +213,25 @@
       "fileName": "vits-piper-en_US-ryan-medium.tar.bz2",
       "sizeBytes": 67213100,
       "sha256": "c546af78b6395b4e7c4ce1ed899438b64426a362f5d4ec5fecd090ded9ad7505",
+      "md5": null,
+      "gated": false,
+      "sentencePiece": false,
+      "minTotalRamBytes": 1610612736,
+      "defaultMaxNumTokens": 0,
+      "licenseUrl": "https://github.com/k2-fsa/sherpa-onnx"
+    },
+    {
+      "id": "tts-piper-fr-siwis",
+      "displayName": "Piper Siwis (fast, French)",
+      "purpose": "tts",
+      "ttsEngine": "vits",
+      "numSpeakers": 1,
+      "source": "url",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium.tar.bz2",
+      "revision": "main",
+      "fileName": "vits-piper-fr_FR-siwis-medium.tar.bz2",
+      "sizeBytes": 67207459,
+      "sha256": "375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b",
       "md5": null,
       "gated": false,
       "sentencePiece": false,

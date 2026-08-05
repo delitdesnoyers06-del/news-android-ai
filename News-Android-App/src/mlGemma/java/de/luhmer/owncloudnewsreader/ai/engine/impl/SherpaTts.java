@@ -91,8 +91,11 @@ public final class SherpaTts implements AiTts {
             model.setKokoro(k);
         } else if (AiCatalogEntry.TTS_ENGINE_MATCHA.equals(engine)) {
             OfflineTtsMatchaModelConfig m = new OfflineTtsMatchaModelConfig();
-            m.setAcousticModel(firstOnnx(root, "model-steps"));
-            m.setVocoder(path(root, "vocos-22khz-univ.onnx"));
+            String acoustic = firstOnnx(root, "model-steps");
+            m.setAcousticModel(acoustic);
+            // The vocoder is the other .onnx in the folder (a HiFi-GAN for the icefall models);
+            // detect it rather than hardcoding a name so the right file is used.
+            m.setVocoder(onnxExcept(root, acoustic));
             m.setTokens(path(root, "tokens.txt"));
             m.setDataDir(dataDir);
             model.setMatcha(m);
@@ -183,6 +186,20 @@ public final class SherpaTts implements AiTts {
         }
         throw new AiException(AiException.Kind.NOT_INSTALLED,
                 "no acoustic .onnx in " + root);
+    }
+
+    /** The {@code *.onnx} under {@code root} other than {@code exceptPath} (Matcha's vocoder). */
+    private static String onnxExcept(File root, String exceptPath) throws AiException {
+        File[] kids = root.listFiles();
+        if (kids != null) {
+            for (File f : kids) {
+                if (f.isFile() && f.getName().endsWith(".onnx")
+                        && !f.getAbsolutePath().equals(exceptPath)) {
+                    return f.getAbsolutePath();
+                }
+            }
+        }
+        throw new AiException(AiException.Kind.NOT_INSTALLED, "no vocoder .onnx in " + root);
     }
 
     /** First file under {@code root} ending in {@code ext}, else {@code ""} (sherpa treats it as unset). */

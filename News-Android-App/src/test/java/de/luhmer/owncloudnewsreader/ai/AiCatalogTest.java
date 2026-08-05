@@ -133,7 +133,7 @@ public class AiCatalogTest {
     @Test
     public void ttsVoicesAreWellFormedArchivesWithAnEngine() {
         java.util.List<AiCatalogEntry> voices = catalog().ttsModels();
-        assertEquals(4, voices.size());
+        assertEquals(5, voices.size());
         boolean sawKokoro = false;
         boolean sawMatcha = false;
         for (AiCatalogEntry e : voices) {
