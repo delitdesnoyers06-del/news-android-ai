@@ -131,6 +131,17 @@ public final class AiCatalog {
         return byId(EMBEDDER_ID);
     }
 
+    /** The downloadable neural TTS voices, in catalogue order. */
+    public List<AiCatalogEntry> ttsModels() {
+        List<AiCatalogEntry> out = new ArrayList<>();
+        for (AiCatalogEntry e : entries) {
+            if (e.isTts()) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
     /**
      * The scoring model this device should get by default. {@code null} on an unsupported device —
      * there is no "least bad" model for hardware that cannot load the runtime at all.

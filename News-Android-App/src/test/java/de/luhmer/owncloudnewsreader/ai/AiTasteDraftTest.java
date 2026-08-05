@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
+import de.luhmer.owncloudnewsreader.ai.engine.AiException;
 import de.luhmer.owncloudnewsreader.ai.prompt.PromptTemplate;
 import de.luhmer.owncloudnewsreader.ai.prompt.TasteDraftGuard;
 

@@ -138,6 +138,9 @@ repositories {
     }
     maven { url 'https://guardian.github.io/maven/repo-releases' }
     //needed for com.gu:option:1.3 in Android-DirectoryChooser
+    // sherpa-onnx has no Maven Central artifact; its Android AAR is bundled in libs/ and consumed
+    // by the mlGemma flavor only (neural TTS). See News-Android-App/libs/README.md.
+    flatDir { dirs 'libs' }
 }
 
 final DAGGER_VERSION = '2.59.2'
@@ -158,6 +161,13 @@ dependencies {
         exclude group: 'com.google.android.datatransport'
     }
     mlGemmaImplementation 'androidx.work:work-runtime:2.10.5'
+
+    // --- neural TTS, mlGemma flavor only ----------------------------------------------------
+    // sherpa-onnx runs the downloadable Kokoro / Piper / Matcha voices. No Maven artifact exists,
+    // so the AAR is bundled in libs/ (arm64-v8a + x86_64, matching the flavor's abiFilters).
+    mlGemmaImplementation(name: 'sherpa-onnx', ext: 'aar')
+    // commons-compress unpacks the sherpa .tar.bz2 model archives (Android has no bzip2).
+    mlGemmaImplementation 'org.apache.commons:commons-compress:1.27.1'
 
     // core android studio module
     // compile project(':core')

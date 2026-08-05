@@ -37,6 +37,18 @@
 
     <!-- AI: settings, detail screen -->
     <string name="pref_header_ai_models">Models</string>
+    <string name="pref_header_ai_tts">Reading voice</string>
+    <string name="pref_title_ai_tts_engine">Use AI voice</string>
+    <string name="pref_summary_ai_tts_engine">Read articles aloud with a downloaded neural voice instead of the system engine</string>
+    <string name="pref_summary_ai_tts_no_voice">Download a voice below to turn this on</string>
+    <string name="pref_title_ai_tts_model">Voice</string>
+    <string name="pref_title_ai_manage_voices">Manage voices</string>
+    <string name="pref_summary_ai_manage_voices">Download or remove neural voices</string>
+    <string name="ai_tts_download_suggestion">No AI voice for this language yet. Download “%1$s” in Settings → AI → Reading voice.</string>
+    <string name="ai_filter_all">All</string>
+    <string name="ai_filter_llm">Language models</string>
+    <string name="ai_filter_embedding">Embedding</string>
+    <string name="ai_filter_tts">Voices</string>
     <string name="pref_header_ai_when">When to run</string>
     <string name="pref_header_ai_taste">What I like</string>
     <string name="pref_header_ai_diagnostics">Diagnostics</string>
@@ -95,6 +107,7 @@
     <string name="ai_model_chip_gated">Needs a Hugging Face token</string>
     <string name="ai_model_purpose_triage">Triage &amp; digests · %1$s</string>
     <string name="ai_model_purpose_similarity">Similarity · %1$s</string>
+    <string name="ai_model_purpose_voice">Reading voice · %1$s</string>
     <string name="ai_model_delete_confirm">Delete %1$s?</string>
     <string name="ai_model_deleted">Deleted %1$s</string>
     <string name="ai_model_open_page">Open model page</string>

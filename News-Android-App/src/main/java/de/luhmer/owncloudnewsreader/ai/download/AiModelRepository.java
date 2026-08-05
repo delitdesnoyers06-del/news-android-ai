@@ -101,6 +101,24 @@ public class AiModelRepository {
         return AiPartMeta.sidecarFor(partFor(e));
     }
 
+    public static final String UNPACK_DIR = "unpacked";
+    /** Written into {@link #unpackedRoot} once extraction and companion fetch both succeed. */
+    public static final String UNPACK_DONE_MARKER = ".unpack_done";
+
+    /**
+     * Where a TTS {@code .tar.bz2} is unpacked to. The archive itself stays put as the install
+     * marker ({@link #isInstalled} is unchanged); the unpacked tree is the engine's working set.
+     */
+    public File unpackedRoot(AiCatalogEntry e) {
+        return new File(new File(dirFor(e), UNPACK_DIR), e.unpackRootName());
+    }
+
+    /** True once the archive has been unpacked and every companion fetched. */
+    public boolean isTtsReady(AiCatalogEntry e) {
+        return e != null && e.isTts()
+                && new File(unpackedRoot(e), UNPACK_DONE_MARKER).isFile();
+    }
+
     /** {@code EngineConfig.cacheDir} — internal, reclaimable, never the weights' volume. */
     public File engineCacheDir(String modelId) {
         File d = new File(new File(app.getCacheDir(), ENGINE_CACHE_DIR), modelId);
@@ -153,9 +171,7 @@ public class AiModelRepository {
         AiModelRegistry registry = db == null ? null : new AiModelRegistry(db);
         for (AiCatalogEntry e : catalog.all()) {
             if (registry != null) {
-                registry.register(e.id, e.isLlm()
-                        ? AiModelRegistry.KIND_LLM : AiModelRegistry.KIND_EMBEDDER,
-                        e.sizeBytes, e.sha256);
+                registry.register(e.id, AiModelRegistry.kindFor(e), e.sizeBytes, e.sha256);
             }
             File finalFile = fileFor(e);
             File part = partFor(e);
@@ -412,6 +428,88 @@ public class AiModelRepository {
     public boolean embedderInstalled() {
         AiCatalogEntry e = catalog.embedder();
         return e != null && isInstalled(e);
+    }
+
+    // ---- TTS resolution --------------------------------------------------------------------
+
+    /** True when at least one neural voice is downloaded and unpacked. */
+    public boolean hasAnyReadyTts() {
+        for (AiCatalogEntry e : catalog.ttsModels()) {
+            if (isTtsReady(e)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The voice the reader chose in {@code sp_ai_tts_model}, or — if that one is gone — the first
+     * ready voice in the catalogue, or {@code null} when none is usable. Mirrors {@link #resolveLlm}:
+     * a preference pointing at a missing model degrades silently rather than failing playback.
+     */
+    public AiCatalogEntry ttsEntryFor(SharedPreferences prefs) {
+        String chosen = prefs == null ? null
+                : prefs.getString(SettingsActivity.SP_AI_TTS_MODEL, null);
+        if (chosen != null && !chosen.isEmpty()) {
+            AiCatalogEntry e = catalog.byId(chosen);
+            if (isTtsReady(e)) {
+                return e;
+            }
+            Log.i(TAG, "selected voice " + chosen + " not ready; falling back");
+        }
+        for (AiCatalogEntry e : catalog.ttsModels()) {
+            if (isTtsReady(e)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The ready voice to read {@code lang} with: the user's chosen default if it matches the
+     * language, else any ready voice for that language, else {@code null} (nothing installed for it).
+     * When {@code lang} is unknown, degrades to {@link #ttsEntryFor} (the plain default).
+     */
+    public AiCatalogEntry ttsEntryForLang(SharedPreferences prefs, String lang) {
+        if (lang == null || lang.isEmpty()) {
+            return ttsEntryFor(prefs);
+        }
+        String chosen = prefs == null ? null
+                : prefs.getString(SettingsActivity.SP_AI_TTS_MODEL, null);
+        if (chosen != null && !chosen.isEmpty()) {
+            AiCatalogEntry e = catalog.byId(chosen);
+            if (e != null && lang.equals(e.lang) && isTtsReady(e)) {
+                return e;
+            }
+        }
+        for (AiCatalogEntry e : catalog.ttsModels()) {
+            if (lang.equals(e.lang) && isTtsReady(e)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /** A catalogue voice for {@code lang} that is not installed yet, to suggest downloading. */
+    public AiCatalogEntry ttsSuggestionForLang(String lang) {
+        if (lang == null || lang.isEmpty()) {
+            return null;
+        }
+        for (AiCatalogEntry e : catalog.ttsModels()) {
+            if (lang.equals(e.lang) && !isTtsReady(e)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /** Builds the engine spec for a ready voice, or {@code null} when it is not usable. */
+    public de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec ttsSpecFor(AiCatalogEntry e) {
+        if (!isTtsReady(e)) {
+            return null;
+        }
+        return new de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec(
+                e.id, e.ttsEngine, unpackedRoot(e));
     }
 
     public long freeExternalBytes() {

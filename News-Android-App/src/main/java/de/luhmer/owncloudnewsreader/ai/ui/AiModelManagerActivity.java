@@ -68,7 +68,24 @@ public class AiModelManagerActivity extends AppCompatActivity implements AiModel
         RecyclerView list = findViewById(R.id.model_list);
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);
+
+        android.widget.RadioGroup filter = findViewById(R.id.model_filter);
+        filter.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == R.id.filter_llm) {
+                filterPurpose = AiCatalogEntry.PURPOSE_LLM;
+            } else if (checkedId == R.id.filter_embedding) {
+                filterPurpose = AiCatalogEntry.PURPOSE_EMBEDDER;
+            } else if (checkedId == R.id.filter_tts) {
+                filterPurpose = AiCatalogEntry.PURPOSE_TTS;
+            } else {
+                filterPurpose = null;
+            }
+            refresh();
+        });
     }
+
+    /** Selected purpose filter, or {@code null} for "All". */
+    private String filterPurpose;
 
     @Override
     protected void onStart() {
@@ -85,6 +102,15 @@ public class AiModelManagerActivity extends AppCompatActivity implements AiModel
 
     private void refresh() {
         List<AiModelRepository.Status> statuses = repo.scan();
+        if (filterPurpose != null) {
+            List<AiModelRepository.Status> filtered = new java.util.ArrayList<>();
+            for (AiModelRepository.Status s : statuses) {
+                if (filterPurpose.equals(s.entry.purpose)) {
+                    filtered.add(s);
+                }
+            }
+            statuses = filtered;
+        }
         AiCatalogEntry recommended =
                 repo.catalog().defaultLlmFor(AiCapability.tier(this));
         adapter.submit(statuses, recommended == null ? null : recommended.id);
