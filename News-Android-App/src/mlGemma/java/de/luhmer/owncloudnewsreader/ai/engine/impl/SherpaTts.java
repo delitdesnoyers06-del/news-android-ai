@@ -80,8 +80,10 @@ public final class SherpaTts implements AiTts {
 
         if (AiCatalogEntry.TTS_ENGINE_KOKORO.equals(engine)) {
             OfflineTtsKokoroModelConfig k = new OfflineTtsKokoroModelConfig();
-            k.setModel(path(root, "model.onnx"));
-            k.setVoices(path(root, "voices.bin"));
+            // The acoustic model file is named per quantisation (model.onnx, model.int8.onnx, …),
+            // so detect the single .onnx rather than hardcoding a name.
+            k.setModel(firstOnnx(root, null));
+            k.setVoices(firstByExt(root, ".bin"));
             k.setTokens(path(root, "tokens.txt"));
             k.setDataDir(dataDir);
             k.setDictDir(optionalDir(root, "dict"));
@@ -181,6 +183,19 @@ public final class SherpaTts implements AiTts {
         }
         throw new AiException(AiException.Kind.NOT_INSTALLED,
                 "no acoustic .onnx in " + root);
+    }
+
+    /** First file under {@code root} ending in {@code ext}, else {@code ""} (sherpa treats it as unset). */
+    private static String firstByExt(File root, String ext) {
+        File[] kids = root.listFiles();
+        if (kids != null) {
+            for (File f : kids) {
+                if (f.isFile() && f.getName().endsWith(ext)) {
+                    return f.getAbsolutePath();
+                }
+            }
+        }
+        return "";
     }
 
     // ---- archive extraction ----------------------------------------------------------------
