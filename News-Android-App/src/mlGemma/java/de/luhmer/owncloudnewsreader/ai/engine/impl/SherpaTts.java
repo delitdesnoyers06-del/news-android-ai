@@ -112,7 +112,7 @@ public final class SherpaTts implements AiTts {
     public AiPcm synthesize(String text, int speakerId, float speed) throws AiException {
         try {
             int sid = Math.max(0, speakerId);
-            int speakers = tts.getNumSpeakers();
+            int speakers = tts.numSpeakers();
             if (speakers > 0 && sid >= speakers) {
                 sid = 0;
             }
@@ -127,7 +127,7 @@ public final class SherpaTts implements AiTts {
     @Override
     public int numSpeakers() {
         try {
-            return tts.getNumSpeakers();
+            return tts.numSpeakers();
         } catch (Throwable t) {
             return 1;
         }
