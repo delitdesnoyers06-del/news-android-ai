@@ -134,8 +134,8 @@ public class AiCatalogTest {
     public void ttsVoicesAreWellFormedArchivesWithAnEngine() {
         java.util.List<AiCatalogEntry> voices = catalog().ttsModels();
         assertEquals(5, voices.size());
-        boolean sawKokoro = false;
         boolean sawMatcha = false;
+        boolean sawFrench = false;
         for (AiCatalogEntry e : voices) {
             assertTrue(e.id + " must be a tts purpose", e.isTts());
             assertNotNull(e.id + " needs an engine", e.ttsEngine);
@@ -146,9 +146,6 @@ public class AiCatalogTest {
                     e.unpackRootName());
             assertEquals(de.luhmer.owncloudnewsreader.database.ai.AiModelRegistry.KIND_TTS,
                     de.luhmer.owncloudnewsreader.database.ai.AiModelRegistry.kindFor(e));
-            if (AiCatalogEntry.TTS_ENGINE_KOKORO.equals(e.ttsEngine)) {
-                sawKokoro = true;
-            }
             if (AiCatalogEntry.TTS_ENGINE_MATCHA.equals(e.ttsEngine)) {
                 sawMatcha = true;
                 assertNotNull("Matcha needs its vocoder companion", e.companions);
@@ -156,9 +153,12 @@ public class AiCatalogTest {
                 assertNotNull(e.companions.get(0).url);
                 assertTrue(e.companions.get(0).sizeBytes > 0);
             }
+            if (e.id.contains("-fr-")) {
+                sawFrench = true;
+            }
         }
-        assertTrue("Kokoro is the quality pick", sawKokoro);
-        assertTrue("Matcha is in the top set", sawMatcha);
+        assertTrue("Matcha is in the set", sawMatcha);
+        assertTrue("at least one French voice is offered", sawFrench);
     }
 
     @Test
