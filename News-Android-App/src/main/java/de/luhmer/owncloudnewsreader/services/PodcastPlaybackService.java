@@ -323,12 +323,9 @@ public class PodcastPlaybackService extends MediaBrowserServiceCompat {
                 mPlaybackService = new MediaPlayerPlaybackService(this, podcastStatusListener, mediaItem);
             //}
         } else if (mediaItem instanceof TTSItem) {
-            if (useAiTts()) {
-                mPlaybackService = new de.luhmer.owncloudnewsreader.services.podcast
-                        .AiTtsPlaybackService(this, podcastStatusListener, mediaItem);
-            } else {
-                mPlaybackService = new TTSPlaybackService(this, podcastStatusListener, mediaItem);
-            }
+            PlaybackService ai = createAiTtsIfPossible(mediaItem);
+            mPlaybackService = (ai != null) ? ai
+                    : new TTSPlaybackService(this, podcastStatusListener, mediaItem);
         }
 
         updateMetadata(mediaItem);
@@ -346,25 +343,65 @@ public class PodcastPlaybackService extends MediaBrowserServiceCompat {
     }
 
     /**
-     * True when the reader turned on "AI voice" <b>and</b> this build can run it <b>and</b> a voice
-     * is actually downloaded. Any of those missing falls back to the system {@link TTSPlaybackService}
-     * — the switch never leaves the reader with silence.
+     * Builds an AI-voice playback service for this article when possible, else {@code null} so the
+     * caller falls back to the system {@link TTSPlaybackService} — the switch never leaves the reader
+     * with silence. The voice is chosen by the article's detected language: if none is installed for
+     * that language we suggest the matching download and fall back to the system engine.
      */
-    private boolean useAiTts() {
+    private PlaybackService createAiTtsIfPossible(MediaItem mediaItem) {
         try {
             if (!de.luhmer.owncloudnewsreader.ai.engine.impl.AiEngines.ttsSupported()) {
-                return false;
+                return null;
             }
             android.content.SharedPreferences prefs =
                     de.luhmer.owncloudnewsreader.ai.AiFeature.prefsOf(this);
             if (!prefs.getBoolean(SettingsActivity.CB_AI_TTS_ENGINE, false)) {
-                return false;
+                return null;
             }
-            return new de.luhmer.owncloudnewsreader.ai.download.AiModelRepository(this)
-                    .hasAnyReadyTts();
+            String text = ((TTSItem) mediaItem).text;
+            String lang = de.luhmer.owncloudnewsreader.services.podcast.ArticleLanguage
+                    .detect(this, text);
+            de.luhmer.owncloudnewsreader.ai.download.AiModelRepository repo =
+                    new de.luhmer.owncloudnewsreader.ai.download.AiModelRepository(this);
+            de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry voice =
+                    repo.ttsEntryForLang(prefs, lang);
+            if (voice == null) {
+                de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry suggest =
+                        repo.ttsSuggestionForLang(lang);
+                if (suggest != null) {
+                    promptVoiceDownload(suggest.displayName);
+                }
+                return null;      // no ready voice for this language → system TTS
+            }
+            de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec spec = repo.ttsSpecFor(voice);
+            if (spec == null) {
+                return null;
+            }
+            return new de.luhmer.owncloudnewsreader.services.podcast.AiTtsPlaybackService(
+                    this, podcastStatusListener, mediaItem, spec, parseSpeaker(prefs));
         } catch (Throwable t) {
-            Log.w(TAG, "AI TTS availability check failed; using system TTS", t);
-            return false;
+            Log.w(TAG, "AI TTS setup failed; using system TTS", t);
+            return null;
+        }
+    }
+
+    private int parseSpeaker(android.content.SharedPreferences prefs) {
+        try {
+            return Math.max(0, Integer.parseInt(
+                    prefs.getString(SettingsActivity.SP_AI_TTS_SPEAKER, "0")));
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    private void promptVoiceDownload(String voiceName) {
+        try {
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                    android.widget.Toast.makeText(this,
+                            getString(R.string.ai_tts_download_suggestion, voiceName),
+                            android.widget.Toast.LENGTH_LONG).show());
+        } catch (Throwable ignored) {
+            // a missing toast is not worth failing playback for
         }
     }
 

@@ -66,6 +66,8 @@ public class AiCatalogEntry {
     // ---- TTS-only fields (null/0 for every other purpose) ---------------------------------
     /** {@link #TTS_ENGINE_VITS}, {@link #TTS_ENGINE_KOKORO} or {@link #TTS_ENGINE_MATCHA}. */
     public String ttsEngine;
+    /** BCP-47 base language of a TTS voice, e.g. {@code "en"}, {@code "fr"}. Drives auto-selection. */
+    public String lang;
     /** Number of selectable speakers/voices the model ships with. */
     public int numSpeakers;
     /** Extra files fetched next to the archive after it is unpacked (e.g. a Matcha vocoder). */

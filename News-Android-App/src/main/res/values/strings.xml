@@ -44,6 +44,11 @@
     <string name="pref_title_ai_tts_model">Voice</string>
     <string name="pref_title_ai_manage_voices">Manage voices</string>
     <string name="pref_summary_ai_manage_voices">Download or remove neural voices</string>
+    <string name="ai_tts_download_suggestion">No AI voice for this language yet. Download “%1$s” in Settings → AI → Reading voice.</string>
+    <string name="ai_filter_all">All</string>
+    <string name="ai_filter_llm">Language models</string>
+    <string name="ai_filter_embedding">Embedding</string>
+    <string name="ai_filter_tts">Voices</string>
     <string name="pref_header_ai_when">When to run</string>
     <string name="pref_header_ai_taste">What I like</string>
     <string name="pref_header_ai_diagnostics">Diagnostics</string>

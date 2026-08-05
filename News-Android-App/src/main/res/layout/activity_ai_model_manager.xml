@@ -18,6 +18,46 @@
         android:textSize="13sp"
         tools:text="2 installed · 2.8 GB used · 12.4 GB free" />
 
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:scrollbars="none">
+
+        <RadioGroup
+            android:id="@+id/model_filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/filter_all"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/ai_filter_all" />
+
+            <RadioButton
+                android:id="@+id/filter_llm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ai_filter_llm" />
+
+            <RadioButton
+                android:id="@+id/filter_embedding"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ai_filter_embedding" />
+
+            <RadioButton
+                android:id="@+id/filter_tts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ai_filter_tts" />
+        </RadioGroup>
+    </HorizontalScrollView>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/model_list"
         android:layout_width="match_parent"

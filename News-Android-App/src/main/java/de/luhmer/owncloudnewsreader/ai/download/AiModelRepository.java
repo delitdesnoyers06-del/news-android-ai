@@ -465,6 +465,44 @@ public class AiModelRepository {
         return null;
     }
 
+    /**
+     * The ready voice to read {@code lang} with: the user's chosen default if it matches the
+     * language, else any ready voice for that language, else {@code null} (nothing installed for it).
+     * When {@code lang} is unknown, degrades to {@link #ttsEntryFor} (the plain default).
+     */
+    public AiCatalogEntry ttsEntryForLang(SharedPreferences prefs, String lang) {
+        if (lang == null || lang.isEmpty()) {
+            return ttsEntryFor(prefs);
+        }
+        String chosen = prefs == null ? null
+                : prefs.getString(SettingsActivity.SP_AI_TTS_MODEL, null);
+        if (chosen != null && !chosen.isEmpty()) {
+            AiCatalogEntry e = catalog.byId(chosen);
+            if (e != null && lang.equals(e.lang) && isTtsReady(e)) {
+                return e;
+            }
+        }
+        for (AiCatalogEntry e : catalog.ttsModels()) {
+            if (lang.equals(e.lang) && isTtsReady(e)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /** A catalogue voice for {@code lang} that is not installed yet, to suggest downloading. */
+    public AiCatalogEntry ttsSuggestionForLang(String lang) {
+        if (lang == null || lang.isEmpty()) {
+            return null;
+        }
+        for (AiCatalogEntry e : catalog.ttsModels()) {
+            if (lang.equals(e.lang) && !isTtsReady(e)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
     /** Builds the engine spec for a ready voice, or {@code null} when it is not usable. */
     public de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec ttsSpecFor(AiCatalogEntry e) {
         if (!isTtsReady(e)) {

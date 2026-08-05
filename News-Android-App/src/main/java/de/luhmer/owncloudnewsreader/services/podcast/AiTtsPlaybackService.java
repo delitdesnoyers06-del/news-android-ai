@@ -1,7 +1,6 @@
 package de.luhmer.owncloudnewsreader.services.podcast;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioTrack;
@@ -12,9 +11,6 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-import de.luhmer.owncloudnewsreader.SettingsActivity;
-import de.luhmer.owncloudnewsreader.ai.AiFeature;
-import de.luhmer.owncloudnewsreader.ai.download.AiModelRepository;
 import de.luhmer.owncloudnewsreader.ai.engine.AiPcm;
 import de.luhmer.owncloudnewsreader.ai.engine.AiTts;
 import de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec;
@@ -51,7 +47,8 @@ public class AiTtsPlaybackService extends PlaybackService {
     // ride out a slow synth (e.g. the heavier Kokoro model) without the AudioTrack starving.
     private static final int QUEUE_CAPACITY = 6;
 
-    private final Context context;
+    private final AiTtsSpec spec;
+    private final int speakerId;
     private final List<String> chunks;
     private final int[] prefixChars;
     private final int totalChars;
@@ -71,9 +68,11 @@ public class AiTtsPlaybackService extends PlaybackService {
     private final BlockingQueue<Object> pcmQueue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
     private static final Object END = new Object();
 
-    public AiTtsPlaybackService(Context context, PodcastStatusListener listener, MediaItem mediaItem) {
+    public AiTtsPlaybackService(Context context, PodcastStatusListener listener, MediaItem mediaItem,
+                                AiTtsSpec spec, int speakerId) {
         super(listener, mediaItem);
-        this.context = context.getApplicationContext();
+        this.spec = spec;
+        this.speakerId = Math.max(0, speakerId);
         String text = ((TTSItem) mediaItem).text;
         this.chunks = TtsTextSplitter.split(text, CHUNK_SIZE);
         this.prefixChars = new int[Math.max(1, chunks.size())];
@@ -103,7 +102,6 @@ public class AiTtsPlaybackService extends PlaybackService {
     /** Opens the engine (blocking, slow) and synthesises each chunk into the queue. */
     private void runProducer() {
         try {
-            AiTtsSpec spec = resolveSpec();
             if (spec == null) {
                 fail("no neural voice selected");
                 return;
@@ -113,7 +111,6 @@ public class AiTtsPlaybackService extends PlaybackService {
             fail("voice load failed: " + t.getMessage());
             return;
         }
-        int speakerId = speakerId();
         for (int i = 0; i < chunks.size() && !released; i++) {
             try {
                 AiPcm pcm = engine.synthesize(chunks.get(i), speakerId, speed);
@@ -306,26 +303,6 @@ public class AiTtsPlaybackService extends PlaybackService {
     }
 
     // ---- helpers ---------------------------------------------------------------------------
-
-    private AiTtsSpec resolveSpec() {
-        try {
-            AiModelRepository repo = new AiModelRepository(context);
-            return repo.ttsSpecFor(repo.ttsEntryFor(AiFeature.prefsOf(context)));
-        } catch (Throwable t) {
-            Log.w(TAG, "could not resolve voice", t);
-            return null;
-        }
-    }
-
-    private int speakerId() {
-        try {
-            SharedPreferences prefs = AiFeature.prefsOf(context);
-            return Math.max(0, Integer.parseInt(
-                    prefs.getString(SettingsActivity.SP_AI_TTS_SPEAKER, "0")));
-        } catch (Throwable t) {
-            return 0;
-        }
-    }
 
     private void fail(String reason) {
         Log.e(TAG, reason);
