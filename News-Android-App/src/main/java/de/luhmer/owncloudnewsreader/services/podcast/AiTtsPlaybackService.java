@@ -99,37 +99,60 @@ public class AiTtsPlaybackService extends PlaybackService {
         producer.start();
     }
 
-    /** Opens the engine (blocking, slow) and synthesises each chunk into the queue. */
+    /**
+     * Opens the engine, synthesises each chunk into the queue, and — crucially — <b>closes the engine
+     * on this same thread</b> in the finally block. The native {@code generate()} is not
+     * interruptible, so the engine must never be released from another thread while a generate is in
+     * flight (that frees the ONNX Runtime session under it and aborts the process). {@code destroy()}
+     * only signals {@link #released}; the loop exits after the current chunk and this finally frees it.
+     */
     private void runProducer() {
+        if (released) {
+            putQuietly(END);
+            return;
+        }
+        AiTts local;
         try {
             if (spec == null) {
                 fail("no neural voice selected");
+                putQuietly(END);
                 return;
             }
-            engine = AiEngines.openTts(spec);
+            local = AiEngines.openTts(spec);
+            engine = local;
         } catch (Throwable t) {
             fail("voice load failed: " + t.getMessage());
+            putQuietly(END);
             return;
         }
-        for (int i = 0; i < chunks.size() && !released; i++) {
-            try {
-                AiPcm pcm = engine.synthesize(chunks.get(i), speakerId, speed);
-                if (pcm == null || pcm.samples == null) {
-                    continue;
+        try {
+            for (int i = 0; i < chunks.size() && !released; i++) {
+                try {
+                    AiPcm pcm = local.synthesize(chunks.get(i), speakerId, speed);
+                    if (pcm == null || pcm.samples == null) {
+                        continue;
+                    }
+                    pcmQueue.put(new Chunk(i, pcm));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (Throwable t) {
+                    Log.e(TAG, "synthesis failed for chunk " + i, t);
+                    // Skip the bad sentence rather than aborting the whole article.
                 }
-                pcmQueue.put(new Chunk(i, pcm));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (Throwable t) {
-                Log.e(TAG, "synthesis failed for chunk " + i, t);
-                // Skip the bad sentence rather than aborting the whole article.
+            }
+            putQuietly(END);
+        } finally {
+            engine = null;
+            try {
+                local.close();
+            } catch (Throwable ignored) {
+                // closing a half-loaded engine is best-effort
             }
         }
-        putQuietly(END);
     }
 
-    /** Drains the queue, lazily building the AudioTrack from the first chunk's sample rate. */
+    /** Drains the queue and owns the AudioTrack lifecycle: it is released here, never from destroy(). */
     private void runConsumer() {
         try {
             while (!released) {
@@ -148,6 +171,18 @@ public class AiTtsPlaybackService extends PlaybackService {
         } catch (Throwable t) {
             Log.e(TAG, "playback failed", t);
             fail("playback failed");
+        } finally {
+            AudioTrack track = audioTrack;
+            audioTrack = null;
+            if (track != null) {
+                try {
+                    track.pause();
+                    track.flush();
+                    track.release();
+                } catch (Throwable ignored) {
+                    // releasing a half-built track is best-effort
+                }
+            }
         }
     }
 
@@ -259,6 +294,9 @@ public class AiTtsPlaybackService extends PlaybackService {
 
     @Override
     public void destroy() {
+        // Only signal + interrupt + halt audio. The engine and AudioTrack are freed by their owning
+        // threads (runProducer / runConsumer finally blocks) so a blocking native generate() is never
+        // torn out from under the synth thread — that was the Scudo double-free in libonnxruntime.
         released = true;
         if (producer != null) {
             producer.interrupt();
@@ -269,18 +307,13 @@ public class AiTtsPlaybackService extends PlaybackService {
         AudioTrack track = audioTrack;
         if (track != null) {
             try {
+                // Stop sound immediately and unblock a consumer stuck in a blocking write; the
+                // consumer thread then releases the track in its finally block.
                 track.pause();
                 track.flush();
-                track.release();
             } catch (Throwable ignored) {
-                // releasing a half-built track is best-effort
+                // best-effort halt
             }
-            audioTrack = null;
-        }
-        AiTts e = engine;
-        if (e != null) {
-            e.close();
-            engine = null;
         }
     }
 
