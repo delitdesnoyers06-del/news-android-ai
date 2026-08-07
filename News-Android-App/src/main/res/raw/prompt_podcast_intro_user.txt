@@ -1,0 +1,3 @@
+TODAY'S STORIES
+{{items}}
+Give the spoken opening now. One or two sentences in {{lang}}. Nothing else.

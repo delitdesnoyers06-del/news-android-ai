@@ -1,6 +1,0 @@
-STORIES
-{{items}}
-TASK
-Narrate these stories as one continuous {{lang}} podcast episode for the listener. Cover them all, in an order that flows, and keep it faithful to what each item actually says.
-
-Start speaking now. Nothing else.

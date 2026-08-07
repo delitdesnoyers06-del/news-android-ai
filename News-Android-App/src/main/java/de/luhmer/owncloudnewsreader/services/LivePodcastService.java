@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.text.Html;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -34,18 +35,20 @@ import de.luhmer.owncloudnewsreader.ai.AiFeature;
 import de.luhmer.owncloudnewsreader.ai.download.AiModelRepository;
 import de.luhmer.owncloudnewsreader.ai.engine.AiConversation;
 import de.luhmer.owncloudnewsreader.ai.engine.AiEngineManager;
+import de.luhmer.owncloudnewsreader.ai.engine.AiLlm;
 import de.luhmer.owncloudnewsreader.ai.engine.AiModelInfo;
 import de.luhmer.owncloudnewsreader.ai.engine.AiPromptSpec;
 import de.luhmer.owncloudnewsreader.ai.engine.AiTtsSpec;
 import de.luhmer.owncloudnewsreader.ai.engine.CancelToken;
 import de.luhmer.owncloudnewsreader.ai.engine.impl.AiEngines;
 import de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry;
-import de.luhmer.owncloudnewsreader.ai.prompt.AbstractGuard;
 import de.luhmer.owncloudnewsreader.ai.prompt.AiPromptBuilder;
 import de.luhmer.owncloudnewsreader.ai.prompt.AiPrompts;
 import de.luhmer.owncloudnewsreader.ai.prompt.PromptTemplate;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.ai.AiDb;
+import de.luhmer.owncloudnewsreader.database.ai.FullTextStore;
+import de.luhmer.owncloudnewsreader.database.model.RssItem;
 import de.luhmer.owncloudnewsreader.services.podcast.SentenceBuffer;
 import de.luhmer.owncloudnewsreader.services.podcast.StreamingTtsPlayer;
 
@@ -74,9 +77,18 @@ public class LivePodcastService extends Service {
     private static final int NOTIFICATION_ID = 4713;
     private static final String CHANNEL_ID = "ai_live_podcast";
 
-    /** Long-form: much larger than the digest abstract's 400, but bounded so the KV cache stays sane. */
-    private static final int PODCAST_MAX_TOKENS = 1500;
-    private static final long TIMEOUT_MS = 300_000L;
+    // The podcast is generated as several short segments — an intro, one paragraph per article, and
+    // a conclusion — rather than one long call. Segmenting gives a small on-device model a much
+    // better shot at length and structure, and each segment streams and starts speaking as soon as
+    // it is generated. Per-segment token caps keep every call's KV cache small.
+    private static final int INTRO_MAX_TOKENS = 220;
+    private static final int BRIEF_MAX_TOKENS = 400;
+    private static final int CONCLUSION_MAX_TOKENS = 220;
+    /** How many articles get their own paragraph. Highest-ranked first; the rest are omitted. */
+    private static final int MAX_BRIEFS = 10;
+    /** Plain-text article context fed to a brief, trimmed so the prompt stays small. */
+    private static final int MAX_CONTEXT_CHARS = 800;
+    private static final long TIMEOUT_MS = 120_000L;
 
     public enum State { PREPARING, PLAYING, PAUSED, DONE, ERROR }
 
@@ -157,17 +169,15 @@ public class LivePodcastService extends Service {
             fail(getString(R.string.live_podcast_unavailable));
             return;
         }
-        AiDb db = new DatabaseConnectionOrm(ctx).aiDb();
+        DatabaseConnectionOrm dbConn = new DatabaseConnectionOrm(ctx);
+        AiDb db = dbConn.aiDb();
         if (db == null) {
             fail(getString(R.string.live_podcast_unavailable));
             return;
         }
 
-        List<String[]> items = new ArrayList<>();
-        for (AiDigests.Entry e : AiDigests.entries(db, digestId)) {
-            items.add(new String[]{e.title == null ? "" : e.title, e.why == null ? "" : e.why});
-        }
-        if (items.isEmpty()) {
+        List<Brief> briefs = buildBriefs(dbConn, db, digestId);
+        if (briefs.isEmpty()) {
             fail(getString(R.string.live_podcast_empty));
             return;
         }
@@ -181,16 +191,12 @@ public class LivePodcastService extends Service {
 
         final Locale locale = Locale.getDefault();
         final String lang = AiPromptBuilder.languageName(locale);
-        final AiPromptSpec spec = AiPromptSpec.builder()
-                .systemInstruction(AiPrompts.podcastSystem(ctx).render(PromptTemplate.vars("lang", lang)))
-                .maxOutputTokens(PODCAST_MAX_TOKENS)
-                // Greedy: a podcast should be faithful narration, not a creative riff.
-                .sampler(1, 1.0d, 0.0d, 0)
-                .perCallTimeoutMs(TIMEOUT_MS)
-                .build();
-        final String userText = AiPrompts.podcastUser(ctx).render(PromptTemplate.vars(
-                "items", AbstractGuard.itemsBlock(items),
-                "lang", lang));
+        // A plain headline list for the intro/conclusion (not the full briefs).
+        final StringBuilder overview = new StringBuilder();
+        for (Brief b : briefs) {
+            overview.append("- ").append(b.title).append('\n');
+        }
+        final String overviewBlock = overview.toString();
 
         StreamingTtsPlayer p = buildPlayer(ctx, db, prefs, locale);
         this.player = p;
@@ -202,21 +208,27 @@ public class LivePodcastService extends Service {
         final boolean gpu = prefs.getBoolean(SettingsActivity.CB_AI_GPU_BACKEND, false);
         try {
             new AiEngineManager(ctx, db).withLlm(model, gpu, token, llm -> {
-                AiConversation conv = llm.start(spec);
-                activeConv = conv;
-                try {
-                    return conv.send(userText, null, delta -> {
-                        appendTranscript(delta);
-                        buffer.feed(delta);
-                    });
-                } finally {
-                    activeConv = null;
-                    try {
-                        conv.close();
-                    } catch (Throwable ignored) {
-                        // best-effort close
+                // Intro.
+                streamSegment(llm, AiPrompts.podcastIntroSystem(ctx), lang, INTRO_MAX_TOKENS, buffer,
+                        AiPrompts.podcastIntroUser(ctx).render(PromptTemplate.vars(
+                                "items", overviewBlock, "lang", lang)));
+                // One paragraph per article.
+                for (Brief b : briefs) {
+                    if (token.isCancelled()) {
+                        break;
                     }
+                    streamSegment(llm, AiPrompts.podcastBriefSystem(ctx), lang, BRIEF_MAX_TOKENS, buffer,
+                            AiPrompts.podcastBriefUser(ctx).render(PromptTemplate.vars(
+                                    "title", b.title, "context", b.context, "lang", lang)));
                 }
+                // Conclusion.
+                if (!token.isCancelled()) {
+                    streamSegment(llm, AiPrompts.podcastConclusionSystem(ctx), lang,
+                            CONCLUSION_MAX_TOKENS, buffer,
+                            AiPrompts.podcastConclusionUser(ctx).render(PromptTemplate.vars(
+                                    "items", overviewBlock, "lang", lang)));
+                }
+                return null;
             });
         } catch (Throwable t) {
             Log.w(TAG, "generation failed", t);
@@ -228,6 +240,117 @@ public class LivePodcastService extends Service {
         // The service stays foreground until the player reports completion.
         buffer.flush();
         p.endInput();
+    }
+
+    /**
+     * Runs one podcast segment (intro, a per-article brief, or the conclusion) as its own short
+     * conversation, streaming the text to the transcript and the TTS buffer. A fresh conversation
+     * per segment resets the KV cache so context does not grow across the whole episode. Each
+     * segment ends with a flushed sentence and a paragraph break so the voice pauses between them.
+     * A failing segment is logged and skipped rather than aborting the episode.
+     */
+    private void streamSegment(AiLlm llm, PromptTemplate systemTemplate, String lang, int maxTokens,
+                               SentenceBuffer buffer, String userText) {
+        AiConversation conv = null;
+        try {
+            AiPromptSpec spec = AiPromptSpec.builder()
+                    .systemInstruction(systemTemplate.render(PromptTemplate.vars("lang", lang)))
+                    .maxOutputTokens(maxTokens)
+                    // Greedy: faithful narration, not a creative riff.
+                    .sampler(1, 1.0d, 0.0d, 0)
+                    .perCallTimeoutMs(TIMEOUT_MS)
+                    .build();
+            conv = llm.start(spec);
+            activeConv = conv;
+            conv.send(userText, null, delta -> {
+                appendTranscript(delta);
+                buffer.feed(delta);
+            });
+        } catch (Throwable t) {
+            Log.w(TAG, "podcast segment failed; skipping", t);
+        } finally {
+            activeConv = null;
+            if (conv != null) {
+                try {
+                    conv.close();
+                } catch (Throwable ignored) {
+                    // best-effort close
+                }
+            }
+            // Close out the segment: emit its trailing sentence and separate it from the next.
+            buffer.flush();
+            appendTranscript("\n\n");
+        }
+    }
+
+    /** Builds the per-article briefs (headline + faithful context) from the digest, capped. */
+    private List<Brief> buildBriefs(DatabaseConnectionOrm dbConn, AiDb db, long digestId) {
+        List<Brief> out = new ArrayList<>();
+        FullTextStore fullText = new FullTextStore(db);
+        for (AiDigests.Entry e : AiDigests.entries(db, digestId)) {
+            if (out.size() >= MAX_BRIEFS) {
+                break;
+            }
+            String title = e.title == null ? "" : e.title.trim();
+            if (title.isEmpty()) {
+                continue;
+            }
+            out.add(new Brief(title, articleContext(dbConn, fullText, e)));
+        }
+        return out;
+    }
+
+    /** Assembles the faithful context for one article: why it was selected plus a body snippet. */
+    private String articleContext(DatabaseConnectionOrm dbConn, FullTextStore fullText,
+                                  AiDigests.Entry e) {
+        StringBuilder sb = new StringBuilder();
+        if (e.why != null && !e.why.trim().isEmpty()) {
+            sb.append("Why it was selected: ").append(e.why.trim()).append('\n');
+        }
+        String body = "";
+        try {
+            if (fullText.hasOk(e.rssItemId)) {
+                body = htmlToText(fullText.contentHtml(e.rssItemId));
+            }
+        } catch (Throwable ignored) {
+            // fall through to the RSS body
+        }
+        if (body.isEmpty()) {
+            try {
+                RssItem item = dbConn.getRssItemById(e.rssItemId);
+                if (item != null) {
+                    body = htmlToText(item.getBody());
+                }
+            } catch (Throwable ignored) {
+                // no body available; the headline + why still make a short brief
+            }
+        }
+        if (!body.isEmpty()) {
+            if (body.length() > MAX_CONTEXT_CHARS) {
+                body = body.substring(0, MAX_CONTEXT_CHARS);
+            }
+            sb.append("Article: ").append(body);
+        }
+        return sb.toString();
+    }
+
+    private static String htmlToText(String html) {
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
+        String text = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY).toString();
+        return text.replaceAll("\\s+", " ").trim();
+    }
+
+    /** One article's material for its paragraph. */
+    private static final class Brief {
+        final String title;
+        final String context;
+
+        Brief(String title, String context) {
+            this.title = title;
+            this.context = context;
+        }
     }
 
     private StreamingTtsPlayer buildPlayer(Context ctx, AiDb db, SharedPreferences prefs,

@@ -1,0 +1,4 @@
+STORY
+Headline: {{title}}
+{{context}}
+Narrate this story now as one spoken paragraph in {{lang}}. Nothing else.
