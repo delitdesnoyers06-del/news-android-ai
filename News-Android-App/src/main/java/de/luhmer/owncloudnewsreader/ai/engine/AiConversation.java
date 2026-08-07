@@ -34,6 +34,35 @@ public interface AiConversation extends java.io.Closeable {
     String send(String userText, AiResponseFormat format) throws AiException;
 
     /**
+     * Receives generated text incrementally. Plain Java, so no coroutine types leak into
+     * {@code src/main}: streaming implementations bridge the underlying (coroutine) stream and call
+     * {@link #onToken(String)} on the calling worker thread for each delta.
+     */
+    interface TokenSink {
+        /** One chunk of freshly generated text ({@code delta}), in generation order. */
+        void onToken(String delta);
+    }
+
+    /**
+     * BLOCKING, streaming variant: like {@link #send(String, AiResponseFormat)} but reports the
+     * output incrementally through {@code sink} as it is generated, and still returns the full text.
+     *
+     * <p>The default is non-streaming: it runs the blocking turn and emits the whole result as a
+     * single delta. That is exactly the right behaviour for flavors/engines without a streaming API
+     * (e.g. the {@code FakeLlm} test double). Engines with a token stream override this.</p>
+     *
+     * @param sink may be {@code null}, in which case this is identical to
+     *             {@link #send(String, AiResponseFormat)}.
+     */
+    default String send(String userText, AiResponseFormat format, TokenSink sink) throws AiException {
+        String full = send(userText, format);
+        if (sink != null && full != null && !full.isEmpty()) {
+            sink.onToken(full);
+        }
+        return full;
+    }
+
+    /**
      * Safe to call from any thread while {@link #send} is blocked; lands within roughly one token.
      * The conversation stays usable afterwards, with its history cleared. A no-op once
      * {@link #close()} has run.
