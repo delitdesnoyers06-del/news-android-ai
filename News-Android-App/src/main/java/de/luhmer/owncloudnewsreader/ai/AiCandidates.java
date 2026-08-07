@@ -7,6 +7,8 @@ import java.util.List;
 
 import de.luhmer.owncloudnewsreader.database.ai.AiDb;
 import de.luhmer.owncloudnewsreader.database.ai.AiKeys;
+import de.luhmer.owncloudnewsreader.database.ai.AiSchema;
+import de.luhmer.owncloudnewsreader.database.ai.FullTextStore;
 
 /**
  * Stage 1 — the hard filter (veille {@code pipeline.py::_stage_candidates}).
@@ -60,9 +62,15 @@ public final class AiCandidates {
      */
     public static List<Candidate> select(AiDb db, long nowMs, int limit, boolean recentOnly) {
         long cutoff = nowMs - (long) WINDOW_DAYS * DAY_MS;
-        String sql = "SELECT RSS_ITEM._id, RSS_ITEM.FINGERPRINT, RSS_ITEM.TITLE, RSS_ITEM.BODY,"
+        // Prefer the Readability-extracted full body over the RSS teaser when one exists, so the
+        // embedding, the LLM score and the digest all read the whole article. Falls back to
+        // RSS_ITEM.BODY when there is no `ok` extraction (feature off, not yet fetched, or failed).
+        String sql = "SELECT RSS_ITEM._id, RSS_ITEM.FINGERPRINT, RSS_ITEM.TITLE,"
+                + " COALESCE(FT.CONTENT_HTML, RSS_ITEM.BODY),"
                 + " RSS_ITEM.FEED_ID, RSS_ITEM.PUB_DATE, RSS_ITEM.LAST_MODIFIED"
                 + " FROM RSS_ITEM"
+                + " LEFT JOIN " + AiSchema.T_FULLTEXT + " FT"
+                + " ON FT.RSS_ITEM_ID = RSS_ITEM._id AND FT.STATE = '" + FullTextStore.STATE_OK + "'"
                 + " WHERE RSS_ITEM.READ_TEMP != 1";
         List<String> args = new ArrayList<>();
         if (recentOnly) {

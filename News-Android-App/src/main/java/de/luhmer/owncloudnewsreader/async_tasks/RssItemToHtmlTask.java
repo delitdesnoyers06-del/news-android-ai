@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 
 import de.luhmer.owncloudnewsreader.R;
 import de.luhmer.owncloudnewsreader.SettingsActivity;
+import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.model.Feed;
 import de.luhmer.owncloudnewsreader.database.model.RssItem;
 import de.luhmer.owncloudnewsreader.helper.ImageHandler;
@@ -56,6 +57,7 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
     private final SharedPreferences mPrefs;
     private final boolean isRightToLeft;
     private final RequestManager mGlide;
+    private final Context mContext;
 
     public interface Listener {
         /**
@@ -71,13 +73,14 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
         this.mListener = listener;
         this.mPrefs = prefs;
         this.mGlide = Glide.with(context);
+        this.mContext = context.getApplicationContext();
 
         this.isRightToLeft = context.getResources().getBoolean(R.bool.is_right_to_left);
     }
 
     @Override
     protected String doInBackground(Void... params) {
-        return getHtmlPage(this.mGlide, mRssItem, true, mPrefs, isRightToLeft);
+        return getHtmlPage(this.mGlide, mRssItem, true, mPrefs, isRightToLeft, mContext);
     }
 
     @Override
@@ -87,15 +90,17 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
     }
 
     public static String getHtmlPage(RequestManager glide, RssItem rssItem, boolean showHeader, SharedPreferences mPrefs, Context context) {
-        return getHtmlPage(glide, rssItem, showHeader, mPrefs, context.getResources().getBoolean(R.bool.is_right_to_left));
+        return getHtmlPage(glide, rssItem, showHeader, mPrefs, context.getResources().getBoolean(R.bool.is_right_to_left), context);
     }
 
     /**
      * @param rssItem       item to parse
      * @param showHeader    true if a header with item title, feed title, etc. should be included
+     * @param context       used to look up extracted full-text; may be {@code null} (then the RSS
+     *                      body is always used, e.g. from tests)
      * @return given RSS item as full HTML page
      */
-    public static String getHtmlPage(RequestManager glide, RssItem rssItem, boolean showHeader, SharedPreferences mPrefs, boolean isRightToLeft) {
+    public static String getHtmlPage(RequestManager glide, RssItem rssItem, boolean showHeader, SharedPreferences mPrefs, boolean isRightToLeft, @Nullable Context context) {
         boolean incognitoMode = mPrefs.getBoolean(INCOGNITO_MODE_ENABLED, false);
 
         String favIconUrl = null;
@@ -139,7 +144,11 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
             );
         }
 
-        String description = rssItem.getBody();
+        // Only resolve the extracted full body for the detail view (showHeader == true), which runs
+        // on a background thread. The list's WebView holder calls this on the main thread with
+        // showHeader == false; a per-row SQLite read there would jank the fling, and a teaser is the
+        // right length for a preview anyway. Passing a null context skips the lookup.
+        String description = resolveEffectiveBody(showHeader ? context : null, rssItem, mPrefs);
 
         if (!description.isEmpty()) {
             description = removeLineBreaksFromHtml(description);
@@ -171,6 +180,27 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
         builder.append("</body></html>");
 
         return builder.toString().replaceAll("\"//", "\"https://");
+    }
+
+    /**
+     * The article body to render: the Readability-extracted full text when the feature is on and an
+     * extraction exists for this item, otherwise the RSS-provided body. Never throws — any lookup
+     * failure falls back to the RSS body.
+     */
+    private static String resolveEffectiveBody(@Nullable Context context, RssItem rssItem, SharedPreferences prefs) {
+        String body = rssItem.getBody();
+        if (context == null || !prefs.getBoolean(SettingsActivity.CB_FULLTEXT_EXTRACTION, false)) {
+            return body;
+        }
+        try {
+            String extracted = new DatabaseConnectionOrm(context).getExtractedFullText(rssItem.getId());
+            if (extracted != null && !extracted.isEmpty()) {
+                return extracted;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "full-text lookup failed, using RSS body", t);
+        }
+        return body;
     }
 
     @VisibleForTesting()

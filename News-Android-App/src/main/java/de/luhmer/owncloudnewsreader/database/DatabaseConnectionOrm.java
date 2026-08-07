@@ -37,6 +37,7 @@ import de.luhmer.owncloudnewsreader.NewsReaderApplication;
 import de.luhmer.owncloudnewsreader.database.ai.AiDb;
 import de.luhmer.owncloudnewsreader.database.ai.AiDebugSeed;
 import de.luhmer.owncloudnewsreader.database.ai.AiSchema;
+import de.luhmer.owncloudnewsreader.database.ai.FullTextStore;
 import de.luhmer.owncloudnewsreader.database.model.CurrentRssItemViewDao;
 import de.luhmer.owncloudnewsreader.database.model.DaoSession;
 import de.luhmer.owncloudnewsreader.database.model.Feed;
@@ -434,6 +435,27 @@ public class DatabaseConnectionOrm {
 
     public LazyList<RssItem> getAllUnreadRssItemsForDownloadWebPageService() {
         return daoSession.getRssItemDao().queryBuilder().where(RssItemDao.Properties.Read_temp.eq(false)).orderDesc(RssItemDao.Properties.PubDate).listLazy();
+    }
+
+    /**
+     * The most recent unread items, newest first, capped at {@code limit}. Feeds the post-sync
+     * full-article extraction ({@code ArticleFullTextService}): it scans these for teaser bodies.
+     */
+    public List<RssItem> getUnreadRssItemsForFullTextExtraction(int limit) {
+        return daoSession.getRssItemDao().queryBuilder()
+                .where(RssItemDao.Properties.Read_temp.eq(false))
+                .orderDesc(RssItemDao.Properties.PubDate, RssItemDao.Properties.Id)
+                .limit(limit)
+                .list();
+    }
+
+    /** The extracted full-article HTML for an item, or {@code null} when none was stored. */
+    public String getExtractedFullText(long rssItemId) {
+        AiDb db = aiDb();
+        if (db == null) {
+            return null;
+        }
+        return new FullTextStore(db).contentHtml(rssItemId);
     }
 
     public LazyList<RssItem> getAllItemsWithIdHigher(long id) {

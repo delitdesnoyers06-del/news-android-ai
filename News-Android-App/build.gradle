@@ -213,6 +213,11 @@ dependencies {
 
     implementation 'com.github.gabrielemariotti.changeloglib:changelog:2.1.0'
     implementation 'org.jsoup:jsoup:1.22.2'
+    // Mozilla Readability (JVM port) for extracting full article text from truncated RSS feeds.
+    // Reuse the app's jsoup above rather than its older pinned transitive one.
+    implementation('net.dankito.readability4j:readability4j:1.0.8') {
+        exclude group: 'org.jsoup'
+    }
     implementation ('net.rdrei.android.dirchooser:library:3.2@aar') {
         exclude group: 'com.google.auto.value', module: 'auto-value'
         transitive = true

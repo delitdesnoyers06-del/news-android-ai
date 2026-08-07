@@ -196,6 +196,9 @@
             android:name=".services.DownloadImagesService"
             android:permission="android.permission.BIND_JOB_SERVICE" />
         <service
+            android:name=".services.ArticleFullTextService"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service
             android:name=".services.SyncItemStateService"
             android:permission="android.permission.BIND_JOB_SERVICE" />
         <service

@@ -166,6 +166,8 @@ public final class AiDb {
     public void garbageCollect() {
         // 1. AI_SCORE is transient: it dies with its article, unconditionally.
         exec("DELETE FROM AI_SCORE WHERE RSS_ITEM_ID NOT IN (SELECT _id FROM RSS_ITEM)");
+        // 1b. AI_FULLTEXT is transient too: extracted content is a cache of one article's body.
+        exec("DELETE FROM AI_FULLTEXT WHERE RSS_ITEM_ID NOT IN (SELECT _id FROM RSS_ITEM)");
         // 2. The embedding of an article the user ruled on IS the taste model. Keep it forever.
         //    Everything else follows the article cache.
         exec("DELETE FROM AI_EMBEDDING"
