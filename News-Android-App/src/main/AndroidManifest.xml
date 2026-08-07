@@ -98,6 +98,12 @@
             android:exported="false" />
 
         <activity
+            android:name=".ai.ui.LivePodcastActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:label="@string/live_podcast_title"
+            android:exported="false" />
+
+        <activity
             android:name=".ai.ui.AiRubricDiffActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:label="@string/ai_diff_title"
@@ -293,6 +299,12 @@
                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service> <!-- android:process=":podcastPlaybackService" -->
+
+        <service
+            android:name=".services.LivePodcastService"
+            android:foregroundServiceType="mediaPlayback"
+            android:enabled="true"
+            android:exported="false" />
 
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"

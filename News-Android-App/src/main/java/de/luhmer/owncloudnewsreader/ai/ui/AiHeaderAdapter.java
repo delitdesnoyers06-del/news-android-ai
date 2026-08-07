@@ -40,6 +40,9 @@ public class AiHeaderAdapter extends RecyclerView.Adapter<AiHeaderAdapter.Digest
     public interface Listener {
         void onDigestOpen(long digestId);
 
+        /** Generate and read aloud a live podcast of this digest. */
+        void onDigestLivePodcast(long digestId);
+
         void onDigestDismiss(long digestId);
 
         /** {@code null} clears the filter and rebuilds the full list. */
@@ -131,6 +134,11 @@ public class AiHeaderAdapter extends RecyclerView.Adapter<AiHeaderAdapter.Digest
                 listener.onDigestOpen(d.id);
             }
         });
+        holder.livePodcast.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onDigestLivePodcast(d.id);
+            }
+        });
         holder.dismiss.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onDigestDismiss(d.id);
@@ -145,6 +153,7 @@ public class AiHeaderAdapter extends RecyclerView.Adapter<AiHeaderAdapter.Digest
         final View placeholder;
         final ChipGroup chips;
         final View open;
+        final View livePodcast;
         final ImageButton dismiss;
 
         DigestCardViewHolder(View v) {
@@ -154,6 +163,7 @@ public class AiHeaderAdapter extends RecyclerView.Adapter<AiHeaderAdapter.Digest
             placeholder = v.findViewById(R.id.digest_abstract_placeholder);
             chips = v.findViewById(R.id.digest_chips);
             open = v.findViewById(R.id.digest_open);
+            livePodcast = v.findViewById(R.id.digest_live_podcast);
             dismiss = v.findViewById(R.id.digest_dismiss);
         }
     }
