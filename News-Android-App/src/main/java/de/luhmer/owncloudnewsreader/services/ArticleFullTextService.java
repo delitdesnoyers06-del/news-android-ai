@@ -22,16 +22,9 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.app.JobIntentService;
 
-import java.util.List;
-
 import de.luhmer.owncloudnewsreader.SettingsActivity;
-import de.luhmer.owncloudnewsreader.articlefulltext.ArticleFullTextExtractor;
-import de.luhmer.owncloudnewsreader.articlefulltext.ThinContentDetector;
+import de.luhmer.owncloudnewsreader.articlefulltext.ArticleFullTextExtraction;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
-import de.luhmer.owncloudnewsreader.database.ai.AiDb;
-import de.luhmer.owncloudnewsreader.database.ai.FullTextStore;
-import de.luhmer.owncloudnewsreader.database.model.RssItem;
-import okhttp3.OkHttpClient;
 
 /**
  * Post-sync background pass that fills in the body of articles whose feed only shipped a teaser.
@@ -52,12 +45,6 @@ public class ArticleFullTextService extends JobIntentService {
     private static final String TAG = ArticleFullTextService.class.getCanonicalName();
 
     private static final int JOB_ID = 1001;
-
-    /** How many recent unread items to inspect for a teaser body in one run. */
-    private static final int SCAN_LIMIT = 100;
-
-    /** How many articles to actually fetch per run, so a big first sync does not stampede. */
-    private static final int MAX_FETCHES_PER_RUN = 30;
 
     /**
      * Enqueues an extraction pass, but only when the feature is enabled. Cheap and safe to call
@@ -85,60 +72,8 @@ public class ArticleFullTextService extends JobIntentService {
         if (!isEnabled(this)) {
             return;
         }
-
-        DatabaseConnectionOrm dbConn = new DatabaseConnectionOrm(this);
-        AiDb aiDb = dbConn.aiDb();
-        if (aiDb == null) {
-            Log.w(TAG, "AI side-store unavailable; skipping full-text extraction");
-            return;
-        }
-
-        FullTextStore store = new FullTextStore(aiDb);
-        OkHttpClient client = ArticleFullTextExtractor.defaultClient();
-
-        List<RssItem> candidates = dbConn.getUnreadRssItemsForFullTextExtraction(SCAN_LIMIT);
-        int fetched = 0;
-
-        for (RssItem item : candidates) {
-            if (fetched >= MAX_FETCHES_PER_RUN) {
-                Log.d(TAG, "Reached per-run fetch cap (" + MAX_FETCHES_PER_RUN + ")");
-                break;
-            }
-
-            long id = item.getId();
-            String state = store.stateOf(id);
-            // Already extracted, or deliberately skipped before: leave it. A previous `failed` is
-            // retried on a later sync (the site may have been down).
-            if (FullTextStore.STATE_OK.equals(state) || FullTextStore.STATE_SKIPPED.equals(state)) {
-                continue;
-            }
-
-            String url = item.getLink();
-            if (url == null || url.trim().isEmpty()) {
-                continue; // no page to fetch; not worth a persistent row
-            }
-            if (!ThinContentDetector.isThin(item.getBody())) {
-                continue; // the RSS body is already a full article
-            }
-
-            long now = System.currentTimeMillis();
-            try {
-                ArticleFullTextExtractor.Result result = ArticleFullTextExtractor.extract(url, client);
-                if (result == null) {
-                    store.mark(id, url, FullTextStore.STATE_SKIPPED, "no_readable_content", now);
-                } else {
-                    store.saveOk(id, url, result.contentHtml, result.excerpt, now);
-                }
-            } catch (Exception ex) {
-                Log.w(TAG, "Full-text extraction failed for " + url + ": " + ex.getMessage());
-                store.mark(id, url, FullTextStore.STATE_FAILED, ex.getMessage(), now);
-            } catch (Throwable t) {
-                // Never let one bad page take the whole run (or the app) down.
-                Log.e(TAG, "Unexpected error extracting " + url, t);
-            }
-            fetched++;
-        }
-
-        Log.d(TAG, "Full-text extraction pass done; attempted " + fetched + " article(s)");
+        ArticleFullTextExtraction.run(this, new DatabaseConnectionOrm(this),
+                ArticleFullTextExtraction.DEFAULT_SCAN_LIMIT,
+                ArticleFullTextExtraction.DEFAULT_MAX_FETCHES);
     }
 }

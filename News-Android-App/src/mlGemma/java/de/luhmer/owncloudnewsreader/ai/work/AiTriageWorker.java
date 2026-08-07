@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 
 import de.luhmer.owncloudnewsreader.SettingsActivity;
+import de.luhmer.owncloudnewsreader.articlefulltext.ArticleFullTextExtraction;
 import de.luhmer.owncloudnewsreader.ai.AiCorrections;
 import de.luhmer.owncloudnewsreader.ai.AiDecisions;
 import de.luhmer.owncloudnewsreader.ai.AiFeature;
@@ -90,6 +91,15 @@ public class AiTriageWorker extends Worker {
                             isCharging(ctx));
                     int budget = allUnread ? AiTriagePipeline.ALL_UNREAD_BUDGET
                             : AiTriagePipeline.topKFor(ctx, prefs);
+                    // Fetch full article bodies for teaser feeds BEFORE embedding, so the whole AI
+                    // pipeline (embeddings, scoring, digest) reads the real article rather than the
+                    // RSS excerpt. Synchronous on purpose: it must finish before candidate selection.
+                    // Same opt-in toggle as the display feature - off means no third-party fetches.
+                    if (prefs.getBoolean(SettingsActivity.CB_FULLTEXT_EXTRACTION, false)) {
+                        int scan = allUnread ? 400 : ArticleFullTextExtraction.DEFAULT_SCAN_LIMIT;
+                        int max = allUnread ? 120 : ArticleFullTextExtraction.DEFAULT_MAX_FETCHES;
+                        ArticleFullTextExtraction.run(ctx, new DatabaseConnectionOrm(ctx), scan, max);
+                    }
                     AiTriagePipeline pipeline = new AiTriagePipeline(ctx, db,
                             new AiEngineManager(ctx, db), budget, budget, !allUnread);
                     AiTriagePipeline.Scoring scoring = scoringFor(ctx, db, prefs);
