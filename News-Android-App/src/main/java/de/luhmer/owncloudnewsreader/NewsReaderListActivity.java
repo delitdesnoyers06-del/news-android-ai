@@ -928,6 +928,7 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 		// Debug-only: seed AI_SCORE so the "For you" folder can be exercised with no model.
 		menu.findItem(R.id.menu_ai_seed_scores).setVisible(BuildConfig.DEBUG);
 		menu.findItem(R.id.menu_ai_clear_scores).setVisible(BuildConfig.DEBUG);
+		menu.findItem(R.id.menu_ai_force_digest).setVisible(BuildConfig.DEBUG);
 		menuItemOnlyUnread = menu.findItem(R.id.menu_toggleShowOnlyUnread);
 		menuItemOnlyUnread.setChecked(mPrefs.getBoolean(SettingsActivity.CB_SHOWONLYUNREAD_STRING, false));
 		syncMenuItemUnreadOnly();
@@ -1039,6 +1040,9 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 			updateCurrentRssView();
 			Toast.makeText(this, "Cleared " + removed + " seeded AI scores", Toast.LENGTH_SHORT).show();
 			return true;
+		} else if (itemId == R.id.menu_ai_force_digest) {
+			forceCreateDigest();
+			return true;
 		} else if (itemId == R.id.menu_CreateDatabaseDump) {
 			DatabaseUtilsKt.copyDatabaseToSdCard(this);
 
@@ -1129,6 +1133,24 @@ public class NewsReaderListActivity extends PodcastFragmentActivity implements
 		updateCurrentRssView();
 
 		Toast.makeText(this, "Seeded AI scores - " + selected + " selected", Toast.LENGTH_SHORT).show();
+	}
+
+	/**
+	 * Debug-only helper behind "Force create digest": rebuilds today's digest row from the current
+	 * selections (bypassing the once-per-day guard) and re-enqueues the worker so the abstract
+	 * regenerates. Never reachable in a release build.
+	 */
+	private void forceCreateDigest() {
+		var digest = de.luhmer.owncloudnewsreader.ai.AiDigests.forceToday(this, System.currentTimeMillis());
+		if (digest == null) {
+			Toast.makeText(this, "No digest: too few selected items today", Toast.LENGTH_SHORT).show();
+			return;
+		}
+		de.luhmer.owncloudnewsreader.ai.work.AiLazyScheduler.enqueueDigestForce(getApplicationContext());
+		reloadCountNumbersOfSlidingPaneAdapter();
+		updateCurrentRssView();
+		Toast.makeText(this, "Digest rebuilt (" + digest.itemCount + " items); generating abstract…",
+				Toast.LENGTH_SHORT).show();
 	}
 
 	private void DownloadMoreItems() {

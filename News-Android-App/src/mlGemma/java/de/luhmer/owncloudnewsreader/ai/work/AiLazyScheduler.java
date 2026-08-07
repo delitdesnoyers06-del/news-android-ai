@@ -47,6 +47,27 @@ public final class AiLazyScheduler {
         }
     }
 
+    /**
+     * Debug-only force path behind "Force create digest": unlike {@link #enqueueDigest(Context)} this
+     * uses {@link ExistingWorkPolicy#REPLACE} so a fresh run supersedes any pending/KEPT one and the
+     * abstract is regenerated for today's (just rebuilt) digest row.
+     */
+    public static void enqueueDigestForce(Context context) {
+        if (context == null || !AiFeature.isEnabled(context)) {
+            return;
+        }
+        try {
+            OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(AiDigestWorker.class)
+                    .addTag(AiDigestWorker.UNIQUE_WORK_NAME)
+                    .build();
+            WorkManager.getInstance(context.getApplicationContext())
+                    .enqueueUniqueWork(AiDigestWorker.UNIQUE_WORK_NAME,
+                            ExistingWorkPolicy.REPLACE, request);
+        } catch (Throwable t) {
+            Log.e(TAG, "could not enqueue the forced digest", t);
+        }
+    }
+
     /** Called from the "Suggest from my decisions" button, and from nowhere else. */
     public static void enqueueTasteDraft(Context context, AiDb db) {
         if (context == null || !AiFeature.isEnabled(context)) {

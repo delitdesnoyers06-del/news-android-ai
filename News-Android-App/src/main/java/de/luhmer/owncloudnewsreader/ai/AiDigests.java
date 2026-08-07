@@ -117,6 +117,41 @@ public final class AiDigests {
     }
 
     /**
+     * Debug-only: drops today's digest row (if any) and rebuilds it from the current selections,
+     * bypassing the once-per-day guard in {@link #ensureToday(AiDb, long)}. The abstract still needs
+     * a model, so the caller should re-enqueue the digest worker afterwards.
+     *
+     * @return the rebuilt digest, or {@code null} when there are still fewer than
+     *         {@link AiDigestBuilder#MIN_ITEMS} selections to build one from.
+     */
+    public static AiDigestStore.Digest forceToday(AiDb db, long now) {
+        if (db == null) {
+            return null;
+        }
+        try {
+            new AiDigestStore(db).deleteByDay(dayKey(now));
+            return ensureToday(db, now);
+        } catch (Throwable t) {
+            Log.e(TAG, "could not force today's digest", t);
+            return null;
+        }
+    }
+
+    /** Convenience for UI callers holding a {@link Context} rather than a database. */
+    public static AiDigestStore.Digest forceToday(Context context, long now) {
+        if (context == null) {
+            return null;
+        }
+        try {
+            AiDb db = new DatabaseConnectionOrm(context).aiDb();
+            return forceToday(db, now);
+        } catch (Throwable t) {
+            Log.e(TAG, "could not force today's digest", t);
+            return null;
+        }
+    }
+
+    /**
      * Everything still unread and selected in {@code (from, to]}, joined to the article for its
      * title and date.
      *
