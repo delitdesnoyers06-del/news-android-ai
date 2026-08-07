@@ -79,6 +79,15 @@
             android:positiveButtonText="@null"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            android:key="sp_ai_tts_speaker"
+            android:title="@string/pref_title_ai_tts_speaker"
+            android:defaultValue="0"
+            android:negativeButtonText="@null"
+            android:positiveButtonText="@null"
+            app:isPreferenceVisible="false"
+            app:iconSpaceReserved="false" />
+
         <Preference
             android:key="pref_ai_manage_voices"
             android:title="@string/pref_title_ai_manage_voices"

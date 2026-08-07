@@ -379,15 +379,60 @@ public class AiSettingsFragment extends PreferenceFragmentCompat {
                 picker.setOnPreferenceChangeListener((preference, newValue) -> {
                     ((ListPreference) preference).setValue(String.valueOf(newValue));
                     preference.setSummary(((ListPreference) preference).getEntry());
+                    // A different model has a different number of voices; reset the speaker and
+                    // re-populate the voice picker for the new model.
+                    android.content.SharedPreferences sp =
+                            getPreferenceManager().getSharedPreferences();
+                    if (sp != null) {
+                        sp.edit().putString(SettingsActivity.SP_AI_TTS_SPEAKER, "0").apply();
+                    }
+                    bindTtsSpeaker(repo, String.valueOf(newValue));
                     return true;
                 });
             }
+            bindTtsSpeaker(repo, picker.getValue());
         }
 
         Preference manageVoices = findPreference(SettingsActivity.PREF_AI_MANAGE_VOICES);
         if (manageVoices != null) {
             manageVoices.setVisible(supported);
         }
+    }
+
+    /**
+     * The voice picker for multi-speaker TTS models (e.g. Piper UPMC French, which ships two
+     * voices). Hidden for single-voice models. Without it the app is stuck on voice 0, so a model
+     * whose second voice sounds better cannot be reached.
+     */
+    private void bindTtsSpeaker(AiModelRepository repo, String modelId) {
+        ListPreference speaker = findPreference(SettingsActivity.SP_AI_TTS_SPEAKER);
+        if (speaker == null) {
+            return;
+        }
+        AiCatalogEntry entry = modelId == null ? null : repo.catalog().byId(modelId);
+        int numSpeakers = entry == null ? 0 : entry.numSpeakers;
+        if (numSpeakers <= 1) {
+            speaker.setVisible(false);
+            return;
+        }
+        CharSequence[] labels = new CharSequence[numSpeakers];
+        CharSequence[] values = new CharSequence[numSpeakers];
+        for (int i = 0; i < numSpeakers; i++) {
+            labels[i] = getString(R.string.pref_ai_tts_voice_n, i + 1);
+            values[i] = String.valueOf(i);
+        }
+        speaker.setEntries(labels);
+        speaker.setEntryValues(values);
+        speaker.setVisible(true);
+        if (speaker.getValue() == null || speaker.getEntry() == null) {
+            speaker.setValue("0");
+        }
+        speaker.setSummary(speaker.getEntry());
+        speaker.setOnPreferenceChangeListener((preference, newValue) -> {
+            ((ListPreference) preference).setValue(String.valueOf(newValue));
+            preference.setSummary(((ListPreference) preference).getEntry());
+            return true;
+        });
     }
 
     /** A status row, not a picker (PLAN D21): there is exactly one embedder and never a second. */
