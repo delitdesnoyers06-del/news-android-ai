@@ -82,7 +82,8 @@ public class LivePodcastService extends Service {
 
     /** Observes transcript/state; the bound {@code LivePodcastActivity} is the only listener. */
     public interface Listener {
-        void onDelta(String delta);
+        /** The full transcript so far. Idempotent: the view just renders it, so re-delivery is safe. */
+        void onTranscript(String fullText);
         void onState(State state);
     }
 
@@ -95,6 +96,7 @@ public class LivePodcastService extends Service {
     private volatile Listener listener;
     private volatile State state = State.PREPARING;
     private volatile String error;
+    private volatile boolean uiPushScheduled;
 
     private CancelToken token = new CancelToken();
     private volatile AiConversation activeConv;
@@ -119,13 +121,21 @@ public class LivePodcastService extends Service {
             stopFromUser();
             return START_NOT_STICKY;
         }
+        // startForegroundService (the caller) obliges us to call startForeground promptly on every
+        // start, including the early-return paths below — otherwise Android 8+ crashes the service
+        // with ForegroundServiceDidNotStartInTimeException.
+        goForeground(getString(R.string.live_podcast_preparing));
         final long digestId = intent == null ? -1 : intent.getLongExtra(EXTRA_DIGEST_ID, -1);
         if (digestId < 0 || !running.compareAndSet(false, true)) {
-            // One episode at a time.
+            // Malformed request, or an episode is already running (one at a time). Release only when
+            // nothing is actually running, so we never kill an in-progress episode.
+            if (!running.get()) {
+                stopForegroundCompat();
+                stopSelf();
+            }
             return START_NOT_STICKY;
         }
         token = new CancelToken();
-        goForeground(getString(R.string.live_podcast_preparing));
         worker.execute(() -> {
             try {
                 runPipeline(digestId);
@@ -267,10 +277,27 @@ public class LivePodcastService extends Service {
         synchronized (transcript) {
             transcript.append(delta);
         }
-        Listener l = listener;
-        if (l != null) {
-            main.post(() -> l.onDelta(delta));
+        pushTranscript();
+    }
+
+    /**
+     * Schedules a single coalesced push of the full transcript to the listener. Coalescing bounds
+     * main-thread work (one render per frame regardless of token rate), and delivering the whole
+     * transcript — rather than a delta — makes the render idempotent, so a rebind (rotation) that
+     * re-pushes cannot duplicate or drop text.
+     */
+    private void pushTranscript() {
+        if (uiPushScheduled) {
+            return;
         }
+        uiPushScheduled = true;
+        main.post(() -> {
+            uiPushScheduled = false;
+            Listener l = listener;
+            if (l != null) {
+                l.onTranscript(getTranscript());
+            }
+        });
     }
 
     private void setState(State s) {
@@ -312,6 +339,9 @@ public class LivePodcastService extends Service {
 
     public void setListener(Listener l) {
         this.listener = l;
+        if (l != null) {
+            pushTranscript();      // seed the (re)bound view with the full transcript
+        }
     }
 
     public void togglePlayPause() {
@@ -342,6 +372,7 @@ public class LivePodcastService extends Service {
         if (p != null) {
             p.stop();
         }
+        worker.shutdownNow();
         AiEngineManager.shutdownNow("live podcast stopped");
         stopForegroundCompat();
         stopSelf();

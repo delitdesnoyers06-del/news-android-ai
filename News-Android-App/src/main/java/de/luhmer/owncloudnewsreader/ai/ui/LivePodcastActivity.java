@@ -59,10 +59,10 @@ public class LivePodcastActivity extends AppCompatActivity implements LivePodcas
         public void onServiceConnected(ComponentName name, IBinder binder) {
             service = ((LivePodcastService.LocalBinder) binder).getService();
             bound = true;
-            service.setListener(LivePodcastActivity.this);
-            // Seed from the current snapshot (handles a rebind after rotation).
-            transcript.setText(service.getTranscript());
             onState(service.getState());
+            // setListener seeds the view with the full transcript via onTranscript; rendering the
+            // whole transcript is idempotent, so this rebind (e.g. after rotation) cannot double text.
+            service.setListener(LivePodcastActivity.this);
         }
 
         @Override
@@ -132,8 +132,8 @@ public class LivePodcastActivity extends AppCompatActivity implements LivePodcas
     // ---- LivePodcastService.Listener -------------------------------------------------------
 
     @Override
-    public void onDelta(String delta) {
-        transcript.append(delta);
+    public void onTranscript(String fullText) {
+        transcript.setText(fullText);
         scroll.post(() -> scroll.fullScroll(ScrollView.FOCUS_DOWN));
     }
 
