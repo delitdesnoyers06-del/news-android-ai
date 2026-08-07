@@ -39,6 +39,19 @@ public final class AiPrompts {
         return PromptTemplate.load(context, R.raw.prompt_abstract_user);
     }
 
+    /**
+     * The live-podcast pair: a long-form spoken narration over the "For you" list. Separate from the
+     * digest abstract because it is much longer (no {@link AbstractGuard} truncation), streams, and
+     * is read aloud rather than shown as the digest's opening paragraph.
+     */
+    public static PromptTemplate podcastSystem(Context context) {
+        return PromptTemplate.load(context, R.raw.prompt_podcast_system);
+    }
+
+    public static PromptTemplate podcastUser(Context context) {
+        return PromptTemplate.load(context, R.raw.prompt_podcast_user);
+    }
+
     public static PromptTemplate tasteSystem(Context context) {
         return PromptTemplate.load(context, R.raw.prompt_taste_system);
     }
