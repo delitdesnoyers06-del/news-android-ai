@@ -26,7 +26,7 @@ public final class AiSchema {
     private static final String TAG = "AiSchema";
 
     /** Bump this and add a branch in {@link #migrate} when a table changes. */
-    public static final int AI_SCHEMA_VERSION = 1;
+    public static final int AI_SCHEMA_VERSION = 2;
 
     public static final String KEY_SCHEMA_VERSION = "schema_version";
 
@@ -41,11 +41,12 @@ public final class AiSchema {
     public static final String T_DIGEST = "AI_DIGEST";
     public static final String T_DIGEST_ITEM = "AI_DIGEST_ITEM";
     public static final String T_MODEL = "AI_MODEL";
+    public static final String T_FULLTEXT = "AI_FULLTEXT";
 
     /** All AI tables, in creation order. Used by the tests and by nothing else. */
     public static final String[] ALL_TABLES = {
             T_META, T_SCORE, T_EMBEDDING, T_DECISION, T_TASTE,
-            T_CENTROID, T_RUBRIC, T_DIGEST, T_DIGEST_ITEM, T_MODEL
+            T_CENTROID, T_RUBRIC, T_DIGEST, T_DIGEST_ITEM, T_MODEL, T_FULLTEXT
     };
 
     private static volatile boolean sReady;
@@ -95,6 +96,8 @@ public final class AiSchema {
     private static void migrate(SQLiteDatabase db, int from, int to) {
         // v1 is the initial schema; createAll() above already produced it. Future versions add
         // their ALTER TABLE statements here, guarded by `if (from < N)`.
+        // v2: AI_FULLTEXT. createAll()'s CREATE TABLE IF NOT EXISTS already made it for anyone
+        // upgrading, so there is nothing extra to do - the branch just documents the bump.
         Log.i(TAG, "AI schema migrated from " + from + " to " + to);
     }
 
@@ -188,6 +191,18 @@ public final class AiSchema {
                 + "RANK_SCORE  REAL,"
                 + "POS         INTEGER NOT NULL,"
                 + "PRIMARY KEY (DIGEST_ID, AI_KEY))");
+
+        // ---- transient: extracted full article body for feeds that ship a truncated RSS body ----
+        // Keyed by RSS_ITEM_ID like AI_SCORE, so it dies with its article (garbageCollect()).
+        // Re-extraction is cheap, so nothing here is worth surviving the greenDAO wipe.
+        db.execSQL("CREATE TABLE IF NOT EXISTS AI_FULLTEXT ("
+                + "RSS_ITEM_ID  INTEGER PRIMARY KEY NOT NULL," // == RSS_ITEM._id, TRANSIENT
+                + "URL          TEXT,"                          // the article link we fetched
+                + "STATE        TEXT NOT NULL DEFAULT 'pending'," // pending|ok|skipped|failed
+                + "CONTENT_HTML TEXT,"                          // Readability article content, NULL unless ok
+                + "EXCERPT      TEXT,"                          // Readability excerpt, for previews
+                + "ERROR        TEXT,"                          // last failure reason, for diagnostics
+                + "FETCHED_AT   INTEGER)");                     // epoch ms of the last attempt
 
         db.execSQL("CREATE TABLE IF NOT EXISTS AI_MODEL ("  // local registry; catalogue is res/raw
                 + "MODEL_ID       TEXT PRIMARY KEY NOT NULL,"  // catalogue id, e.g. 'gemma-4-E2B'

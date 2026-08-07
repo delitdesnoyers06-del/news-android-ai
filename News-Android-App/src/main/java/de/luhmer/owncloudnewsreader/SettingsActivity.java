@@ -75,6 +75,13 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String CB_DISABLE_HOSTNAME_VERIFICATION_STRING = "cb_DisableHostnameVerification";
     public static final String CB_SKIP_DETAILVIEW_AND_OPEN_BROWSER_DIRECTLY_STRING = "cb_openInBrowserDirectly";
 
+    /**
+     * Opt-in: after a sync, fetch the original page of articles whose feed only shipped a teaser
+     * body and store the Readability-extracted full text. Off by default because it fetches from
+     * third-party article hosts, which the app otherwise never does.
+     */
+    public static final String CB_FULLTEXT_EXTRACTION = "cb_fulltext_extraction";
+
     //public static final String CB_ENABLE_PODCASTS_STRING = "cb_enablePodcasts";
 
     public static final String PREF_SERVER_SETTINGS = "pref_server_settings";
