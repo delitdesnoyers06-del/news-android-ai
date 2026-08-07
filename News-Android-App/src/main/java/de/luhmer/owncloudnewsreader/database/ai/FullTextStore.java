@@ -92,6 +92,12 @@ public class FullTextStore {
                 new String[]{String.valueOf(rssItemId)});
     }
 
+    /** The epoch-ms of the last attempt, or {@code 0} when there is no row. */
+    public long fetchedAt(long rssItemId) {
+        return db.queryLong("SELECT FETCHED_AT FROM AI_FULLTEXT WHERE RSS_ITEM_ID = ?",
+                new String[]{String.valueOf(rssItemId)}, 0L);
+    }
+
     public int countByState(String state) {
         return (int) db.queryLong("SELECT COUNT(*) FROM AI_FULLTEXT WHERE STATE = ?",
                 new String[]{state}, 0L);

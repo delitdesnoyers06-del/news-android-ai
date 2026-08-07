@@ -50,16 +50,26 @@ public final class ArticleFullTextExtraction {
     /** How many articles to actually fetch per pass, so a big first sync does not stampede. */
     public static final int DEFAULT_MAX_FETCHES = 30;
 
+    /** Wall-clock ceiling for one pass. Keeps the caller (a Worker/JobIntentService) inside its
+     *  execution window even when hosts are slow: the loop stops here regardless of the fetch cap. */
+    public static final long DEFAULT_BUDGET_MS = 120_000L;
+
+    /** A {@code failed} article is not retried until this long after its last attempt, so a
+     *  permanently broken URL cannot burn the fetch budget on every sync. */
+    private static final long FAILED_RETRY_COOLDOWN_MS = 6L * 60 * 60 * 1000;
+
     private ArticleFullTextExtraction() {
     }
 
     /**
      * Fetches and extracts the full body of recent unread articles whose RSS body is only a teaser.
      *
+     * @param budgetMs wall-clock ceiling for the whole pass; the loop stops once it is exceeded
      * @return the number of articles a fetch was attempted for (0 when the AI side-store is
      *         unavailable or nothing qualified)
      */
-    public static int run(Context context, DatabaseConnectionOrm dbConn, int scanLimit, int maxFetches) {
+    public static int run(Context context, DatabaseConnectionOrm dbConn, int scanLimit,
+                          int maxFetches, long budgetMs) {
         AiDb aiDb = dbConn.aiDb();
         if (aiDb == null) {
             Log.w(TAG, "AI side-store unavailable; skipping full-text extraction");
@@ -71,18 +81,28 @@ public final class ArticleFullTextExtraction {
 
         List<RssItem> candidates = dbConn.getUnreadRssItemsForFullTextExtraction(scanLimit);
         int fetched = 0;
+        final long start = System.currentTimeMillis();
 
         for (RssItem item : candidates) {
             if (fetched >= maxFetches) {
                 Log.d(TAG, "Reached per-run fetch cap (" + maxFetches + ")");
                 break;
             }
+            if (System.currentTimeMillis() - start > budgetMs) {
+                Log.d(TAG, "Reached per-run time budget (" + budgetMs + "ms)");
+                break;
+            }
 
             long id = item.getId();
             String state = store.stateOf(id);
-            // Already extracted, or deliberately skipped before: leave it. A previous `failed` is
-            // retried on a later pass (the site may have been down).
+            // Already extracted, or deliberately skipped: leave it.
             if (FullTextStore.STATE_OK.equals(state) || FullTextStore.STATE_SKIPPED.equals(state)) {
+                continue;
+            }
+            // A previous `failed` is retried, but only after a cooldown - a dead URL must not be
+            // re-fetched on every single sync.
+            if (FullTextStore.STATE_FAILED.equals(state)
+                    && System.currentTimeMillis() - store.fetchedAt(id) < FAILED_RETRY_COOLDOWN_MS) {
                 continue;
             }
 

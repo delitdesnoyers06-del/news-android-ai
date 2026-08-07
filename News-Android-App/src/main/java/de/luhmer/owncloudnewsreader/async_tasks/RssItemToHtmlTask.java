@@ -144,7 +144,11 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
             );
         }
 
-        String description = resolveEffectiveBody(context, rssItem, mPrefs);
+        // Only resolve the extracted full body for the detail view (showHeader == true), which runs
+        // on a background thread. The list's WebView holder calls this on the main thread with
+        // showHeader == false; a per-row SQLite read there would jank the fling, and a teaser is the
+        // right length for a preview anyway. Passing a null context skips the lookup.
+        String description = resolveEffectiveBody(showHeader ? context : null, rssItem, mPrefs);
 
         if (!description.isEmpty()) {
             description = removeLineBreaksFromHtml(description);

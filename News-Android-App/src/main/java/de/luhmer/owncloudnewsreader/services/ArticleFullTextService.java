@@ -74,6 +74,7 @@ public class ArticleFullTextService extends JobIntentService {
         }
         ArticleFullTextExtraction.run(this, new DatabaseConnectionOrm(this),
                 ArticleFullTextExtraction.DEFAULT_SCAN_LIMIT,
-                ArticleFullTextExtraction.DEFAULT_MAX_FETCHES);
+                ArticleFullTextExtraction.DEFAULT_MAX_FETCHES,
+                ArticleFullTextExtraction.DEFAULT_BUDGET_MS);
     }
 }

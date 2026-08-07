@@ -1,5 +1,6 @@
 package de.luhmer.owncloudnewsreader.articlefulltext;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -42,5 +43,29 @@ public class ArticleFullTextExtractorTest {
     public void emptyHtmlYieldsNull() {
         assertNull(ArticleFullTextExtractor.parse("https://example.com/x", ""));
         assertNull(ArticleFullTextExtractor.parse("https://example.com/x", null));
+    }
+
+    @Test
+    public void stripsActiveMarkupFromExtractedContent() {
+        // A hostile page: the extracted body must not carry <script> or inline event handlers into
+        // the JavaScript-enabled WebView that renders it.
+        String hostile = "<html><body><article>"
+                + "<h1>Story</h1>"
+                + "<p>The lede paragraph is long enough to be recognised as the article's main "
+                + "content by the Readability scoring, so the body is not discarded as boilerplate.</p>"
+                + "<p onclick=\"steal()\">The second paragraph adds more substance and an inline "
+                + "handler that must be removed before this HTML ever reaches the WebView.</p>"
+                + "<img src=\"https://h/x.png\" onerror=\"alert(1)\"/>"
+                + "<script>alert('xss')</script>"
+                + "</article></body></html>";
+
+        ArticleFullTextExtractor.Result result =
+                ArticleFullTextExtractor.parse("https://example.com/story", hostile);
+
+        assertNotNull(result);
+        assertFalse("no inline event handlers", result.contentHtml.contains("onclick"));
+        assertFalse("no inline error handlers", result.contentHtml.contains("onerror"));
+        assertFalse("no scripts", result.contentHtml.toLowerCase().contains("<script"));
+        assertTrue("article text is kept", result.contentHtml.contains("lede paragraph"));
     }
 }

@@ -95,10 +95,19 @@ public class AiTriageWorker extends Worker {
                     // pipeline (embeddings, scoring, digest) reads the real article rather than the
                     // RSS excerpt. Synchronous on purpose: it must finish before candidate selection.
                     // Same opt-in toggle as the display feature - off means no third-party fetches.
+                    // Note: an article already embedded from its teaser in an earlier run is not
+                    // re-embedded when it later gains full text (the embedding is keyed by fingerprint
+                    // and skipped when present). The common path is unaffected - a freshly-synced
+                    // article is extracted here first and has no embedding yet, so it embeds from the
+                    // full body in this same run.
                     if (prefs.getBoolean(SettingsActivity.CB_FULLTEXT_EXTRACTION, false)) {
                         int scan = allUnread ? 400 : ArticleFullTextExtraction.DEFAULT_SCAN_LIMIT;
                         int max = allUnread ? 120 : ArticleFullTextExtraction.DEFAULT_MAX_FETCHES;
-                        ArticleFullTextExtraction.run(ctx, new DatabaseConnectionOrm(ctx), scan, max);
+                        // Bounded wall-clock so extraction cannot eat the Worker's execution window
+                        // (WorkManager kills an overrun): embedding/scoring/digest still get to run.
+                        long budgetMs = allUnread ? 240_000L : ArticleFullTextExtraction.DEFAULT_BUDGET_MS;
+                        ArticleFullTextExtraction.run(ctx, new DatabaseConnectionOrm(ctx), scan, max,
+                                budgetMs);
                     }
                     AiTriagePipeline pipeline = new AiTriagePipeline(ctx, db,
                             new AiEngineManager(ctx, db), budget, budget, !allUnread);
