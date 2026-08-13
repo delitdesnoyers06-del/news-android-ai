@@ -181,6 +181,15 @@
 # path references them, and a warning about them is not actionable.
 -dontwarn com.google.android.datatransport.**
 
+# --- sherpa-onnx neural TTS (mlGemma) ----------------------------------------
+# libsherpa-onnx-jni.so reads the OfflineTts* config objects' fields by their exact JVM names via
+# JNI GetFieldID (model, vits, kokoro, matcha, numThreads, provider, debug, tokens, dataDir, ...)
+# and resolves generateImpl/newFromFile by name, and the native side constructs GeneratedAudio and
+# sets its fields the same way. R8 renaming or stripping anything under com.k2fsa.sherpa.onnx makes
+# those lookups miss, so OfflineTts is built on a null/garbage native handle and generate() segfaults
+# — only in minified release builds (debug is unminified and works). Keep the whole package verbatim.
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+
 # --- Gson DTOs for the model catalogue ---------------------------------------
 -keep class de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry { *; }
 -keep class de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry$Companion { *; }
