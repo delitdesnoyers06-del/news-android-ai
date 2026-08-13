@@ -10,8 +10,10 @@ import org.robolectric.RobolectricTestRunner;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import de.luhmer.owncloudnewsreader.ai.engine.AiException;
 import de.luhmer.owncloudnewsreader.ai.prompt.PromptTemplate;
@@ -148,16 +150,21 @@ public class AiTasteDraftTest {
 
         FakeLlm llm = new FakeLlm((text, turn) -> DRAFT);
         draft(llm, CURRENT, many, titles());
-        String prompt = llm.prompts.get(0);
 
-        int lines = 0;
-        for (String line : prompt.split("\n")) {
-            if (line.startsWith("- Saved article")) {
-                lines++;
+        // The starred titles are capped to MAX_STARRED, then chunked CHUNK_STARRED at a time across
+        // several prompts, so no single prompt holds them all. Count the distinct starred bullet
+        // lines across every prompt: that verifies the cap (MAX_STARRED, not the 51 raw) and the
+        // dedup (the repeated title appears once), and the pipe is stripped from all of them.
+        Set<String> starredLines = new LinkedHashSet<>();
+        for (String prompt : llm.prompts) {
+            for (String line : prompt.split("\n")) {
+                if (line.startsWith("- Saved article")) {
+                    starredLines.add(line);
+                }
             }
+            assertFalse("a pipe in a scraped title must never reach a prompt", prompt.contains("|"));
         }
-        assertEquals(AiTasteDraft.MAX_STARRED, lines);
-        assertFalse("a pipe in a scraped title must never reach a prompt", prompt.contains("|"));
+        assertEquals(AiTasteDraft.MAX_STARRED, starredLines.size());
     }
 
     @Test
