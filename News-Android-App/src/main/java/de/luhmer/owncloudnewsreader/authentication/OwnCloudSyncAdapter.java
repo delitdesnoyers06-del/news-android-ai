@@ -36,6 +36,7 @@ import de.luhmer.owncloudnewsreader.notification.NextcloudNotificationManager;
 import de.luhmer.owncloudnewsreader.reader.InsertIntoDatabase;
 import de.luhmer.owncloudnewsreader.reader.nextcloud.ItemStateSync;
 import de.luhmer.owncloudnewsreader.reader.nextcloud.RssItemObservable;
+import de.luhmer.owncloudnewsreader.services.ArticleFullTextService;
 import de.luhmer.owncloudnewsreader.services.DownloadImagesService;
 import de.luhmer.owncloudnewsreader.services.events.SyncFailedEvent;
 import de.luhmer.owncloudnewsreader.services.events.SyncFinishedEvent;
@@ -89,6 +90,10 @@ public class OwnCloudSyncAdapter extends AbstractThreadedSyncAdapter {
         // and its syncRunning flag drives the UI spinner, so a minute of on-device inference must
         // never run inside it. No-op in the mlNone flavor and whenever the feature is off.
         AiTriageScheduler.enqueueAfterSync(getContext());
+
+        // Fill in full article bodies for feeds that only shipped a teaser (opt-in, off by default).
+        // Enqueue only - same rule as above: no network work on the synchronous sync thread.
+        ArticleFullTextService.enqueueAfterSync(getContext());
 
 
         // Send sync finished event

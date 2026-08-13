@@ -42,6 +42,8 @@
     <string name="pref_summary_ai_tts_engine">Read articles aloud with a downloaded neural voice instead of the system engine</string>
     <string name="pref_summary_ai_tts_no_voice">Download a voice below to turn this on</string>
     <string name="pref_title_ai_tts_model">Voice</string>
+    <string name="pref_title_ai_tts_speaker">Speaker</string>
+    <string name="pref_ai_tts_voice_n">Voice %1$d</string>
     <string name="pref_title_ai_manage_voices">Manage voices</string>
     <string name="pref_summary_ai_manage_voices">Download or remove neural voices</string>
     <string name="ai_tts_download_suggestion">No AI voice for this language yet. Download “%1$s” in Settings → AI → Reading voice.</string>
@@ -127,6 +129,20 @@
     <string name="ai_digest_title">Digest</string>
     <string name="ai_digest_overline">Digest</string>
     <string name="ai_digest_read">Read digest</string>
+    <string name="live_podcast_action">Live podcast</string>
+    <string name="live_podcast_title">Live podcast</string>
+    <string name="live_podcast_channel">Live podcast</string>
+    <string name="live_podcast_preparing">Preparing…</string>
+    <string name="live_podcast_playing">Playing</string>
+    <string name="live_podcast_paused">Paused</string>
+    <string name="live_podcast_done">Done</string>
+    <string name="live_podcast_play">Play</string>
+    <string name="live_podcast_pause">Pause</string>
+    <string name="live_podcast_stop">Stop</string>
+    <string name="live_podcast_error">Live podcast failed</string>
+    <string name="live_podcast_unavailable">Live podcast is not available on this device</string>
+    <string name="live_podcast_no_model">No AI model installed for the podcast</string>
+    <string name="live_podcast_empty">No digest to narrate yet</string>
     <string name="ai_digest_dismiss">Hide today\'s digest</string>
     <string name="ai_digest_mark_all_read">Mark all as read</string>
     <string name="ai_digest_theme_other">Everything else</string>
@@ -226,6 +242,9 @@
     <string name="action_add_new_feed">Add new feed</string>
     <string name="action_add_new_folder">Add new folder</string>
     <string name="action_textToSpeech">Read out</string>
+    <string name="action_tts_language">Reading language</string>
+    <string name="tts_language_dialog_title">Reading language for this article</string>
+    <string name="tts_language_automatic">Automatic (detect)</string>
     <string name="action_search">Search</string>
     <string name="action_download_articles_offline">Download articles offline</string>
     <string name="news_list_drawer_text" translatable="false">Feed-list</string>
@@ -602,6 +621,8 @@
     <string name="pref_title_clearCache">Clear cache</string>
     <string name="pref_title_CacheImagesOffline">Cache images offline</string>
     <string name="pref_title_Max_Cache_Size">Max Cache Size</string>
+    <string name="pref_title_fulltext_extraction">Fetch full article content</string>
+    <string name="pref_summary_fulltext_extraction">For feeds that only send a short excerpt, download the original page after syncing and show the full article. Contacts the article\'s website.</string>
 
     <string name="pref_data_sync_image_cache_never">Never</string>
     <string name="pref_data_sync_image_cache_wifi_only">Over WiFi only</string>

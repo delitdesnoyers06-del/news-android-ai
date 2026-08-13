@@ -27,6 +27,7 @@ import de.luhmer.owncloudnewsreader.database.ai.AiDecisionStore;
 import de.luhmer.owncloudnewsreader.database.ai.AiEmbeddingStore;
 import de.luhmer.owncloudnewsreader.database.ai.AiSchema;
 import de.luhmer.owncloudnewsreader.database.ai.AiScoreStore;
+import de.luhmer.owncloudnewsreader.database.ai.FullTextStore;
 import de.luhmer.owncloudnewsreader.database.model.DaoMaster;
 
 /**
@@ -82,6 +83,34 @@ public class AiTriagePipelineTest {
         assertEquals(2, c.size());
         assertEquals("undated articles are KEPT, and sort last", "fresh", c.get(0).title);
         assertEquals("undated", c.get(1).title);
+    }
+
+    @Test
+    public void candidateBodyPrefersExtractedFullTextOverTheRssTeaser() {
+        article(1, "fp1", "fresh", NOW - DAY, false);
+        // The RSS body inserted by article() is "body of fresh"; an ok extraction must win so the
+        // embedding and the digest read the whole article, not the teaser.
+        new FullTextStore(db).saveOk(1L, "https://example.com/a",
+                "<p>the full extracted article body</p>", "excerpt", NOW);
+
+        List<AiCandidates.Candidate> c = AiCandidates.select(db, NOW, 100);
+
+        assertEquals(1, c.size());
+        assertTrue("extracted full text must be preferred",
+                c.get(0).body.contains("full extracted article body"));
+    }
+
+    @Test
+    public void candidateBodyFallsBackToRssBodyWhenExtractionIsNotOk() {
+        article(1, "fp1", "fresh", NOW - DAY, false);
+        // A failed extraction must NOT replace the RSS body.
+        new FullTextStore(db).mark(1L, "https://example.com/a",
+                FullTextStore.STATE_FAILED, "boom", NOW);
+
+        List<AiCandidates.Candidate> c = AiCandidates.select(db, NOW, 100);
+
+        assertEquals(1, c.size());
+        assertEquals("body of fresh", c.get(0).body);
     }
 
     @Test

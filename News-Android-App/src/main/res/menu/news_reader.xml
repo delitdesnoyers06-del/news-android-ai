@@ -78,6 +78,14 @@
         tools:ignore="HardcodedText" />
 
     <item
+        android:id="@+id/menu_ai_force_digest"
+        app:showAsAction="never"
+        android:orderInCategory="105"
+        android:title="Force create digest (debug)"
+        android:visible="false"
+        tools:ignore="HardcodedText" />
+
+    <item
         android:id="@+id/menu_CreateDatabaseDump"
         app:showAsAction="never"
         android:orderInCategory="102"

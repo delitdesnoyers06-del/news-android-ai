@@ -158,6 +158,14 @@ public class AiDigestStore {
         db.delete(AiSchema.T_DIGEST_ITEM, "DIGEST_ID = ?", new String[]{String.valueOf(digestId)});
     }
 
+    /** Drops the digest for a single day-key and its items. Used by the debug force-rebuild path. */
+    public void deleteByDay(String dayKey) {
+        db.exec("DELETE FROM AI_DIGEST_ITEM WHERE DIGEST_ID IN"
+                        + " (SELECT _id FROM AI_DIGEST WHERE DAY_KEY = ?)",
+                new Object[]{dayKey});
+        db.exec("DELETE FROM AI_DIGEST WHERE DAY_KEY = ?", new Object[]{dayKey});
+    }
+
     /** Drops digests older than {@code keepDays} day-keys, and their items. */
     public void pruneOlderThan(String oldestDayKeyToKeep) {
         db.exec("DELETE FROM AI_DIGEST_ITEM WHERE DIGEST_ID IN"

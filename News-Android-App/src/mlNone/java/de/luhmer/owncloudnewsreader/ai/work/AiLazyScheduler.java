@@ -23,6 +23,10 @@ public final class AiLazyScheduler {
         // no AI in this flavor
     }
 
+    public static void enqueueDigestForce(Context context) {
+        // no AI in this flavor
+    }
+
     public static void enqueueTasteDraft(Context context, AiDb db) {
         // no AI in this flavor
     }

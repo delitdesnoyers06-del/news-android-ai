@@ -359,8 +359,12 @@ public class PodcastPlaybackService extends MediaBrowserServiceCompat {
                 return null;
             }
             String text = ((TTSItem) mediaItem).text;
-            String lang = de.luhmer.owncloudnewsreader.services.podcast.ArticleLanguage
-                    .detect(this, text);
+            // A per-article language chosen by the user wins over auto-detection.
+            String override = ((TTSItem) mediaItem).ttsLanguage;
+            String lang = (override != null && !override.isEmpty())
+                    ? override
+                    : de.luhmer.owncloudnewsreader.services.podcast.ArticleLanguage
+                            .detect(this, text);
             de.luhmer.owncloudnewsreader.ai.download.AiModelRepository repo =
                     new de.luhmer.owncloudnewsreader.ai.download.AiModelRepository(this);
             de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry voice =

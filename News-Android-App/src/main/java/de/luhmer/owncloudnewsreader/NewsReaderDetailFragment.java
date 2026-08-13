@@ -674,6 +674,11 @@ public class NewsReaderDetailFragment extends Fragment {
         }
 
         @Override
+        public void onDigestLivePodcast(long digestId) {
+            de.luhmer.owncloudnewsreader.ai.ui.LivePodcastActivity.launch(requireContext(), digestId);
+        }
+
+        @Override
         public void onDigestDismiss(long digestId) {
             try {
                 DatabaseConnectionOrm dbConn = new DatabaseConnectionOrm(requireContext());

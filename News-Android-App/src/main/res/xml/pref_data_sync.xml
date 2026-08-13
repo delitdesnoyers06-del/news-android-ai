@@ -77,6 +77,13 @@
             android:title="@string/pref_title_Max_Cache_Size"
             app:iconSpaceReserved="false"/>
 
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="cb_fulltext_extraction"
+            android:title="@string/pref_title_fulltext_extraction"
+            android:summary="@string/pref_summary_fulltext_extraction"
+            app:iconSpaceReserved="false"/>
+
     </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

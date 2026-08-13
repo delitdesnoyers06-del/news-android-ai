@@ -5,9 +5,12 @@ import android.util.Log;
 import com.google.ai.edge.litertlm.Content;
 import com.google.ai.edge.litertlm.Conversation;
 import com.google.ai.edge.litertlm.Message;
+import com.google.ai.edge.litertlm.MessageCallback;
 import com.google.ai.edge.litertlm.ResponseFormat;
 
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import de.luhmer.owncloudnewsreader.ai.engine.AiConversation;
 import de.luhmer.owncloudnewsreader.ai.engine.AiException;
@@ -19,6 +22,13 @@ import de.luhmer.owncloudnewsreader.ai.engine.AiResponseFormat;
  * <p>Uses the <b>blocking</b> {@code sendMessage} overload rather than the {@code Flow} one: the
  * Flow variant is the only member of the API that would drag coroutines into a Java call site, and
  * the caller ({@code LlmCall}) is already on a worker thread with its own watchdog.</p>
+ *
+ * <p>The streaming variant ({@link #send(String, AiResponseFormat, TokenSink)}) uses the
+ * <b>callback</b> overload {@code sendMessageAsync(String, MessageCallback, ...)} — which is plain
+ * Java, no coroutines — and blocks the worker thread on a latch until {@code onDone}/{@code onError}
+ * so it keeps the same blocking contract as {@code send}. Each {@code onMessage} chunk is a delta
+ * (the callback layer does no accumulation), so we forward it straight to the sink and also collect
+ * it into the returned full text.</p>
  *
  * <p>{@code cancelProcess()} is safe from another thread while {@code sendMessage} blocks and lands
  * within roughly one token — that is what makes the 120 s watchdog and "disable AI mid-run" real
@@ -76,21 +86,88 @@ final class LiteRtConversation implements AiConversation {
                     null,                                    // maxOutputToken (from the config)
                     null,                                    // ThinkingConfig
                     formatFor(format));
-            if (out == null || out.getContents() == null) {
-                return "";
-            }
-            StringBuilder sb = new StringBuilder();
-            for (Content c : out.getContents().getContents()) {
-                if (c instanceof Content.Text) {
-                    sb.append(((Content.Text) c).getText());
-                }
-            }
-            return sb.toString();
+            return textOf(out);
         } catch (OutOfMemoryError t) {
             throw new AiException(AiException.Kind.OUT_OF_MEMORY, "decode OOM", t);
         } catch (Throwable t) {
             throw new AiException(AiException.Kind.RUNTIME, "sendMessage failed", t);
         }
+    }
+
+    @Override
+    public String send(String userText, AiResponseFormat format, TokenSink sink) throws AiException {
+        if (sink == null) {
+            return send(userText, format);
+        }
+        final StringBuilder full = new StringBuilder();
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicReference<Throwable> error = new AtomicReference<>();
+        try {
+            conv.sendMessageAsync(
+                    userText,
+                    new MessageCallback() {
+                        @Override
+                        public void onMessage(Message message) {
+                            String delta = textOf(message);
+                            if (!delta.isEmpty()) {
+                                full.append(delta);
+                                try {
+                                    sink.onToken(delta);
+                                } catch (Throwable t) {
+                                    Log.w(TAG, "token sink threw", t);
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void onDone() {
+                            done.countDown();
+                        }
+
+                        @Override
+                        public void onError(Throwable t) {
+                            error.set(t);
+                            done.countDown();
+                        }
+                    },
+                    Collections.<String, Object>emptyMap(),   // extraContext
+                    null,                                     // RepetitionPenaltyConfig
+                    null,                                     // NoRepeatNgramConfig
+                    null,                                     // SuppressTokensConfig
+                    null,                                     // maxOutputToken (from the config)
+                    null,                                     // ThinkingConfig
+                    formatFor(format));
+            done.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AiException(AiException.Kind.RUNTIME, "streaming interrupted", e);
+        } catch (OutOfMemoryError t) {
+            throw new AiException(AiException.Kind.OUT_OF_MEMORY, "decode OOM", t);
+        } catch (Throwable t) {
+            throw new AiException(AiException.Kind.RUNTIME, "sendMessageAsync failed", t);
+        }
+        Throwable t = error.get();
+        if (t != null) {
+            if (t instanceof OutOfMemoryError) {
+                throw new AiException(AiException.Kind.OUT_OF_MEMORY, "decode OOM", t);
+            }
+            throw new AiException(AiException.Kind.RUNTIME, "streaming failed", t);
+        }
+        return full.toString();
+    }
+
+    /** Concatenates the text parts of one message, ignoring any non-text content. */
+    private static String textOf(Message message) {
+        if (message == null || message.getContents() == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Content c : message.getContents().getContents()) {
+            if (c instanceof Content.Text) {
+                sb.append(((Content.Text) c).getText());
+            }
+        }
+        return sb.toString();
     }
 
     /**
