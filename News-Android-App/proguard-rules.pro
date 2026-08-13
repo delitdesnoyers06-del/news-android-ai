@@ -48,6 +48,11 @@
 # jsoup
 -dontwarn com.google.re2j.*
 
+# readability4j depends on slf4j-api, whose LoggerFactory.bind() references the binding class
+# org.slf4j.impl.StaticLoggerBinder. No slf4j binding is bundled (logging is a no-op), so the class
+# is absent at build time; without this, R8 fails the release build on the missing reference.
+-dontwarn org.slf4j.**
+
 # Other Libraries
 -dontwarn org.apache.velocity.**
 -dontwarn freemarker.**
