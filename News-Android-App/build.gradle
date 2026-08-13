@@ -54,10 +54,15 @@ android {
     signingConfigs {
         if (hasReleaseKeystore) {
             release {
+                def storePass = System.getenv('SIGNING_KEYSTORE_PASSWORD')
+                // keytool now defaults to PKCS12, where the key password equals the store password.
+                // SIGNING_KEY_PASSWORD is therefore optional: fall back to the store password when
+                // it is unset, so a single-password keystore needs only three secrets.
+                def keyPass = System.getenv('SIGNING_KEY_PASSWORD')
                 storeFile file(releaseKeystorePath)
-                storePassword System.getenv('SIGNING_KEYSTORE_PASSWORD')
+                storePassword storePass
                 keyAlias System.getenv('SIGNING_KEY_ALIAS')
-                keyPassword System.getenv('SIGNING_KEY_PASSWORD')
+                keyPassword (keyPass != null && !keyPass.isEmpty()) ? keyPass : storePass
             }
         }
     }

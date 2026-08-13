@@ -23,12 +23,12 @@ both ABIs, and without the keystore env vars the release build stays unsigned.
 Add these under **Settings → Secrets and variables → Actions → New repository
 secret**:
 
-| Secret | Value |
-| --- | --- |
-| `SIGNING_KEYSTORE_BASE64` | The release keystore, base64-encoded (see below) |
-| `SIGNING_KEYSTORE_PASSWORD` | Keystore (store) password |
-| `SIGNING_KEY_ALIAS` | Key alias inside the keystore |
-| `SIGNING_KEY_PASSWORD` | Password for that key |
+| Secret | Required | Value |
+| --- | --- | --- |
+| `SIGNING_KEYSTORE_BASE64` | yes | The release keystore, base64-encoded (see below) |
+| `SIGNING_KEYSTORE_PASSWORD` | yes | Keystore (store) password |
+| `SIGNING_KEY_ALIAS` | yes | Key alias inside the keystore |
+| `SIGNING_KEY_PASSWORD` | optional | Password for the key. Omit it for a default (PKCS12) keystore — the build falls back to the store password. Set it only if the key has a different password. |
 
 ### Create a keystore (once)
 
@@ -38,6 +38,10 @@ keytool -genkeypair -v \
   -alias news-release \
   -keyalg RSA -keysize 2048 -validity 10000
 ```
+
+`keytool` creates a **PKCS12** keystore by default and prompts once for a
+password, which becomes both the store and the key password. So you normally set
+only `SIGNING_KEYSTORE_PASSWORD` and leave `SIGNING_KEY_PASSWORD` unset.
 
 ### Encode it for the secret
 
