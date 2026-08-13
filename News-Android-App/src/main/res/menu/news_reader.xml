@@ -62,6 +62,30 @@
         android:title="@string/action_add_new_feed"/>
 
     <item
+        android:id="@+id/menu_ai_seed_scores"
+        app:showAsAction="never"
+        android:orderInCategory="103"
+        android:title="Seed AI scores (debug)"
+        android:visible="false"
+        tools:ignore="HardcodedText" />
+
+    <item
+        android:id="@+id/menu_ai_clear_scores"
+        app:showAsAction="never"
+        android:orderInCategory="104"
+        android:title="Clear AI scores (debug)"
+        android:visible="false"
+        tools:ignore="HardcodedText" />
+
+    <item
+        android:id="@+id/menu_ai_force_digest"
+        app:showAsAction="never"
+        android:orderInCategory="105"
+        android:title="Force create digest (debug)"
+        android:visible="false"
+        tools:ignore="HardcodedText" />
+
+    <item
         android:id="@+id/menu_CreateDatabaseDump"
         app:showAsAction="never"
         android:orderInCategory="102"

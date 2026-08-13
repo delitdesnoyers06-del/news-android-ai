@@ -257,7 +257,10 @@ public abstract class RssItemViewHolder<T extends ViewBinding> extends RecyclerV
 
     @Override
     public void onClick(View v) {
-        clickListener.onClick(this, getLayoutPosition());
+        // Use the position within this item's own adapter, not the ConcatAdapter-absolute one:
+        // the "For You" folder prepends the AI digest card via a header adapter, so
+        // getLayoutPosition() would be off by the header count and open the next article.
+        clickListener.onClick(this, getBindingAdapterPosition());
     }
 
     public void setClickListener(RecyclerItemClickListener clickListener) {
@@ -266,7 +269,7 @@ public abstract class RssItemViewHolder<T extends ViewBinding> extends RecyclerV
 
     @Override
     public boolean onLongClick(View v) {
-        return clickListener.onLongClick(this, getLayoutPosition());
+        return clickListener.onLongClick(this, getBindingAdapterPosition());
     }
 
     public void setStarred(boolean isStarred) {

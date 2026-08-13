@@ -40,6 +40,32 @@
             android:tint="?attr/colorControlActivated"/>
 
         <!--
+          The two AI taste buttons. GONE by default and only shown when cb_ai_enabled is on:
+          the bar is wrap_content and bottom-end anchored, so five 56dp buttons plus the margins
+          are 312dp - it overflows a 320dp-wide device. Everyone who never turns AI on keeps a
+          byte-identical bar.
+        -->
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/fa_ai_up"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:visibility="gone"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/action_ai_more_like_this"
+            android:src="@drawable/ic_thumb_up_24_theme_aware"
+            android:tint="?attr/colorControlActivated"/>
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/fa_ai_down"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:visibility="gone"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/action_ai_less_like_this"
+            android:src="@drawable/ic_thumb_down_24_theme_aware"
+            android:tint="?attr/colorControlActivated"/>
+
+        <!--
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/fa_share"
             android:layout_width="56dp"

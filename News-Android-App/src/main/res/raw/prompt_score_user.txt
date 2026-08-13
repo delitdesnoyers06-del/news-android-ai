@@ -1,0 +1,28 @@
+INTERESTS
+{{interests}}
+
+TAGS
+Use only these tag names:
+{{tags}}
+competitor = a company the reader watches, or a directly comparable offer.
+regulation = a law, decree, tender rule or policy change in the reader's market.
+customer = a client, partner or account the reader named.
+Use - when no tag fits. Never invent a tag name.
+{{corrections}}
+ARTICLES
+{{articles}}
+
+ANSWER
+Write exactly {{n}} lines, one per article, in this format:
+
+n|score|tags|why
+
+n is the number in square brackets.
+score is 0, 1, 2 or 3.
+tags are tag names separated by commas, or -.
+why is at most 12 words in {{lang}}, saying why this matters to this reader. No pipe character in why.
+
+Example line:
+2|3|regulation,on-demand-transport|new EU rule on demand-responsive services
+
+Write the {{lang}} lines now. Nothing else.

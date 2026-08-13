@@ -43,6 +43,30 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    // Release signing is driven entirely by environment variables so the keystore never lives in
+    // the repo. CI populates them from GitHub secrets (see .github/workflows/ci.yml). When the
+    // keystore env var is absent or the file is missing — local builds, F-Droid, oss — the release
+    // build stays unsigned exactly as before, so nothing outside CI changes.
+    def releaseKeystorePath = System.getenv('SIGNING_KEYSTORE_FILE')
+    def hasReleaseKeystore = releaseKeystorePath != null && !releaseKeystorePath.isEmpty() &&
+            file(releaseKeystorePath).exists()
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            release {
+                def storePass = System.getenv('SIGNING_KEYSTORE_PASSWORD')
+                // keytool now defaults to PKCS12, where the key password equals the store password.
+                // SIGNING_KEY_PASSWORD is therefore optional: fall back to the store password when
+                // it is unset, so a single-password keystore needs only three secrets.
+                def keyPass = System.getenv('SIGNING_KEY_PASSWORD')
+                storeFile file(releaseKeystorePath)
+                storePassword storePass
+                keyAlias System.getenv('SIGNING_KEY_ALIAS')
+                keyPassword (keyPass != null && !keyPass.isEmpty()) ? keyPass : storePass
+            }
+        }
+    }
+
     buildTypes {
         debug {
             shrinkResources false
@@ -56,11 +80,13 @@ android {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             testProguardFiles 'proguard-test.pro'
-            //signingConfig signingConfigs.debug
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
-    flavorDimensions = ["default"]
+    flavorDimensions = ["default", "ml"]
 
     productFlavors {
         // 100% Open-Source Edition
@@ -71,6 +97,33 @@ android {
         dev {
             dimension "default"
             applicationIdSuffix ".dev"
+        }
+
+        // --- on-device AI dimension (docs/ai/PLAN.md D10) ---------------------------------
+        // mlNone must keep today's dependency graph byte-identical: it is the F-Droid / oss
+        // artifact, and PRIVACY.md promises nothing leaves the device. All AI dependencies are
+        // declared with the mlGemmaImplementation configuration so mlNone never resolves them.
+        mlNone {
+            dimension "ml"
+        }
+        // mlGemma carries the two Google binary blobs. arm64-v8a only on real devices:
+        // litertlm-android:0.15.0 ships jni/arm64-v8a + jni/x86_64 and nothing else, so a
+        // universal APK would install on armeabi-v7a and die in System.loadLibrary.
+        // x86_64 is kept solely so connectedAndroidTest can run on an emulator.
+        //
+        // The native runtimes (LiteRT, MediaPipe, sherpa-onnx) dominate the APK size, so bundling
+        // both ABIs roughly doubles it. CI overrides this with -PmlGemmaAbi=arm64-v8a to build a
+        // real-device-only artifact that fits the Actions storage quota; the default keeps both
+        // ABIs so emulator instrumentation still works locally.
+        mlGemma {
+            dimension "ml"
+            applicationIdSuffix ".ai"
+            ndk {
+                def requestedAbis = (project.findProperty('mlGemmaAbi') ?: 'arm64-v8a,x86_64')
+                        .toString().split(',').collect { it.trim() }.findAll { !it.isEmpty() }
+                abiFilters.clear()
+                abiFilters.addAll(requestedAbis)
+            }
         }
     }
 
@@ -84,6 +137,13 @@ android {
     packagingOptions {
         resources {
             excludes += ['META-INF/LICENSE.txt', 'META-INF/NOTICE.txt', 'LICENSE.txt', 'META-INF/services/javax.annotation.processing.Processor']
+            // Both MediaPipe AARs carry an identical ~2.19 MB META-INF/NOTICE.
+            excludes += ['META-INF/NOTICE', 'META-INF/DEPENDENCIES']
+        }
+        jniLibs {
+            // TextSummarizer / TextProofreader JNI (~6.67 MB). TextEmbedder binds
+            // libmediapipe_tasks_jni.so instead, so this one is dead weight.
+            excludes += ['**/libmediapipe_tasks_textgenai_jni.so']
         }
     }
 
@@ -112,6 +172,9 @@ repositories {
     }
     maven { url 'https://guardian.github.io/maven/repo-releases' }
     //needed for com.gu:option:1.3 in Android-DirectoryChooser
+    // sherpa-onnx has no Maven Central artifact; its Android AAR is bundled in libs/ and consumed
+    // by the mlGemma flavor only (neural TTS). See News-Android-App/libs/README.md.
+    flatDir { dirs 'libs' }
 }
 
 final DAGGER_VERSION = '2.59.2'
@@ -122,6 +185,24 @@ final MOCKITO_VERSION = '5.23.0'
 final RETROFIT_VERSION = '3.0.0'
 
 dependencies {
+    // --- on-device AI, mlGemma flavor only (docs/ai/PLAN.md §4.6) ---------------------
+    // Pinned, never 'latest.release': these Maven modules carry no status metadata, so a
+    // dynamic version would silently pick up 0.16.0-alpha01 the day it lands.
+    mlGemmaImplementation 'com.google.ai.edge.litertlm:litertlm-android:0.15.0'
+    // datatransport is Google Clearcut telemetry; excluding it is what keeps the AI variant
+    // honest about PRIVACY.md. Spike S5 must confirm TextEmbedder still initialises without it.
+    mlGemmaImplementation('com.google.mediapipe:tasks-text:1.0.0') {
+        exclude group: 'com.google.android.datatransport'
+    }
+    mlGemmaImplementation 'androidx.work:work-runtime:2.10.5'
+
+    // --- neural TTS, mlGemma flavor only ----------------------------------------------------
+    // sherpa-onnx runs the downloadable Kokoro / Piper / Matcha voices. No Maven artifact exists,
+    // so the AAR is bundled in libs/ (arm64-v8a + x86_64, matching the flavor's abiFilters).
+    mlGemmaImplementation(name: 'sherpa-onnx', ext: 'aar')
+    // commons-compress unpacks the sherpa .tar.bz2 model archives (Android has no bzip2).
+    mlGemmaImplementation 'org.apache.commons:commons-compress:1.27.1'
+
     // core android studio module
     // compile project(':core')
     // You must install or update the Google Repository through the SDK manager to use this dependency.
@@ -166,6 +247,11 @@ dependencies {
 
     implementation 'com.github.gabrielemariotti.changeloglib:changelog:2.1.0'
     implementation 'org.jsoup:jsoup:1.22.2'
+    // Mozilla Readability (JVM port) for extracting full article text from truncated RSS feeds.
+    // Reuse the app's jsoup above rather than its older pinned transitive one.
+    implementation('net.dankito.readability4j:readability4j:1.0.8') {
+        exclude group: 'org.jsoup'
+    }
     implementation ('net.rdrei.android.dirchooser:library:3.2@aar') {
         exclude group: 'com.google.auto.value', module: 'auto-value'
         transitive = true

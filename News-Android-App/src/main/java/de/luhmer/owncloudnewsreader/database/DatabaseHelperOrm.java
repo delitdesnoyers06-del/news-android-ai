@@ -24,6 +24,7 @@ package de.luhmer.owncloudnewsreader.database;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 
+import de.luhmer.owncloudnewsreader.database.ai.AiSchema;
 import de.luhmer.owncloudnewsreader.database.model.DaoMaster;
 import de.luhmer.owncloudnewsreader.database.model.DaoSession;
 
@@ -38,6 +39,11 @@ public class DatabaseHelperOrm {
                     DaoMaster.DevOpenHelper helper = new DaoMaster.DevOpenHelper(context, DATABASE_NAME_ORM, null);
                     // Access the database using the helper
                     SQLiteDatabase db = helper.getWritableDatabase();
+                    // Create/migrate the AI tables. They live in the same file but greenDAO must
+                    // never learn about them - that is what makes them survive dropAllTables().
+                    // This has to run AFTER getWritableDatabase() (so any greenDAO upgrade in the
+                    // same call has already completed) and BEFORE new DaoMaster(db).
+                    AiSchema.createOrMigrate(db);
                     // Construct the DaoMaster which brokers DAOs for the Domain Objects
                     DaoMaster daoMaster = new DaoMaster(db);
                     // Create the session which is a container for the DAO layer and has a cache which will return handles to the same object across multiple queries

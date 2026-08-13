@@ -22,6 +22,6 @@ jobs:
         with:
           languages: java
       - name: Build debug APK
-        run: bash ./gradlew assembleDev
+        run: bash ./gradlew assembleDevMlGemmaDebug
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

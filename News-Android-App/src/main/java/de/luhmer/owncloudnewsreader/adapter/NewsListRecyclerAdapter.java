@@ -399,6 +399,40 @@ public class NewsListRecyclerAdapter extends RecyclerView.Adapter<RecyclerView.V
         loading = false;
     }
 
+    /**
+     * Removes one row from the backing list, for an AI taste decision (PLAN D5).
+     *
+     * <p>{@code lazyList} is already mutated in place by the load-more path, but it may be a view
+     * over a greenDAO {@code LazyList} whose {@code remove()} is unsupported; falling back to
+     * {@code notifyDataSetChanged()} keeps the adapter consistent instead of throwing out of a
+     * gesture handler.</p>
+     */
+    public void removeItemAt(int position) {
+        if (lazyList == null || position < 0 || position >= lazyList.size()) {
+            return;
+        }
+        try {
+            lazyList.remove(position);
+            notifyItemRemoved(position);
+        } catch (UnsupportedOperationException ignored) {
+            notifyDataSetChanged();
+        }
+    }
+
+    /** Puts a removed row back, for the mandatory 5 s undo. Clamps rather than throwing. */
+    public void restoreItemAt(int position, RssItem item) {
+        if (lazyList == null || item == null) {
+            return;
+        }
+        int p = Math.max(0, Math.min(position, lazyList.size()));
+        try {
+            lazyList.add(p, item);
+            notifyItemInserted(p);
+        } catch (UnsupportedOperationException ignored) {
+            notifyDataSetChanged();
+        }
+    }
+
     public interface IOnRefreshFinished {
         void OnRefreshFinished();
     }

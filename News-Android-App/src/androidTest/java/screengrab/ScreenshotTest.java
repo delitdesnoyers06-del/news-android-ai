@@ -105,7 +105,7 @@ public class ScreenshotTest {
         Screengrab.screenshot("detail_activity");
 
         mActivity.runOnUiThread(() -> {
-            NewsListRecyclerAdapter na = (NewsListRecyclerAdapter) nrdf.getRecyclerView().getAdapter();
+            NewsListRecyclerAdapter na = nrdf.getNewsAdapter();
             RssItemViewHolder vh = (RssItemViewHolder) nrdf.getRecyclerView().getChildViewHolder(nrdf.getRecyclerView().getLayoutManager().findViewByPosition(itemPos));
             na.changeReadStateOfItem(vh, false);
         });

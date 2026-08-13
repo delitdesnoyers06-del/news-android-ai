@@ -75,6 +75,13 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String CB_DISABLE_HOSTNAME_VERIFICATION_STRING = "cb_DisableHostnameVerification";
     public static final String CB_SKIP_DETAILVIEW_AND_OPEN_BROWSER_DIRECTLY_STRING = "cb_openInBrowserDirectly";
 
+    /**
+     * Opt-in: after a sync, fetch the original page of articles whose feed only shipped a teaser
+     * body and store the Readability-extracted full text. Off by default because it fetches from
+     * third-party article hosts, which the app otherwise never does.
+     */
+    public static final String CB_FULLTEXT_EXTRACTION = "cb_fulltext_extraction";
+
     //public static final String CB_ENABLE_PODCASTS_STRING = "cb_enablePodcasts";
 
     public static final String PREF_SERVER_SETTINGS = "pref_server_settings";
@@ -104,6 +111,62 @@ public class SettingsActivity extends AppCompatActivity {
 
     public static final String CB_VERSION = "cb_version";
     public static final String CB_REPORT_ISSUE = "cb_reportIssue";
+
+    // ---- AI triage ----
+    // The full key set is declared here (dev:ui-and-integration §5.1) so that the phases that own
+    // the preference screens, the model manager and the worker policies all agree on the strings.
+    // Only the ones the shipped code reads today are referenced; the rest are placeholders on
+    // purpose - a key that changes spelling between phases silently orphans a user's setting.
+    public static final String CB_AI_ENABLED = "cb_ai_enabled";
+    public static final String PREF_AI_SETTINGS = "pref_ai_settings";
+
+    public static final String SP_AI_MODEL_TRIAGE = "sp_ai_model_triage";
+    public static final String SP_AI_MODEL_EMBEDDING = "sp_ai_model_embedding";
+    public static final String SP_AI_MODEL_DIGEST = "sp_ai_model_digest";
+    public static final String SP_AI_MODEL_ENRICH = "sp_ai_model_enrich";
+    public static final String SP_AI_MODEL_LEARN = "sp_ai_model_learn";
+    // D21: the digest/enrich/learn pickers collapse to two switches; the keys above stay so a
+    // future advanced screen can set them and the resolver never changes.
+    public static final String CB_AI_ENRICH_ENABLED     = "cb_ai_enrich_enabled";
+    public static final String CB_AI_LEARN_ENABLED      = "cb_ai_learn_enabled";
+    public static final String AI_MODEL_SAME_AS_TRIAGE = "__same_as_triage__";
+    public static final String AI_MODEL_OFF = "__off__";
+
+    public static final String PREF_AI_MANAGE_MODELS = "pref_ai_manage_models";
+    public static final String PREF_AI_DELETE_MODELS = "pref_ai_delete_models";
+    public static final String EDT_AI_HF_TOKEN = "edt_ai_hf_token";
+
+    // ---- reading (text-to-speech) ----
+    /** On = use a downloaded neural voice; off = the system Android TextToSpeech engine. */
+    public static final String CB_AI_TTS_ENGINE = "cb_ai_tts_engine";
+    /** Catalogue id of the selected neural voice. */
+    public static final String SP_AI_TTS_MODEL = "sp_ai_tts_model";
+    /** Speaker/voice index within the selected model (multi-speaker models only). */
+    public static final String SP_AI_TTS_SPEAKER = "sp_ai_tts_speaker";
+    /** Opens the model manager to download/delete neural voices. */
+    public static final String PREF_AI_MANAGE_VOICES = "pref_ai_manage_voices";
+
+    public static final String SP_AI_RUN_TRIGGER = "sp_ai_run_trigger";
+    public static final String SP_AI_BATCH_BUDGET = "sp_ai_batch_budget";
+    public static final String CB_AI_ANALYZE_ALL_UNREAD_WHILE_CHARGING =
+            "cb_ai_analyze_all_unread_while_charging";
+    public static final String SP_AI_SCORE_BATCH        = "sp_ai_score_batch";
+    public static final String SP_AI_MIN_BATTERY = "sp_ai_min_battery";
+    public static final String CB_AI_GPU_BACKEND = "cb_ai_gpu_backend";
+    public static final String CB_AI_DOWNLOADS_WIFI_ONLY = "cb_ai_downloads_wifi_only";
+    public static final String CB_AI_THERMAL_PAUSE = "cb_ai_thermal_pause";
+
+    public static final String EDT_AI_INTERESTS = "edt_ai_interests";
+    public static final String PREF_AI_SUGGEST_INTERESTS = "pref_ai_suggest_interests";
+    public static final String CB_AI_STAR_IS_LIKE = "cb_ai_star_is_like";
+    public static final String PREF_AI_RESET_TASTE = "pref_ai_reset_taste";
+    /** Opens the append-only version list of the interests note (PLAN Phase 8, revert path). */
+    public static final String PREF_AI_NOTE_HISTORY = "pref_ai_note_history";
+
+    public static final String PREF_AI_LAST_RUN = "pref_ai_last_run";
+    public static final String CB_AI_DEBUG_LOG = "cb_ai_debug_log";
+    public static final String PREF_AI_DIGEST_NOTIFY = "cb_ai_digest_notify";
+    public static final String SP_AI_DIGEST_NOTIFY_TIME = "sp_ai_digest_notify_time";
 
     protected @Inject SharedPreferences mPrefs;
 

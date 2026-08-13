@@ -66,6 +66,12 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import de.luhmer.owncloudnewsreader.ai.AiCapability;
+import de.luhmer.owncloudnewsreader.ai.download.AiModelRepository;
+import de.luhmer.owncloudnewsreader.ai.engine.AiEngineManager;
+import de.luhmer.owncloudnewsreader.ai.work.AiTriageScheduler;
+import de.luhmer.owncloudnewsreader.ai.ui.AiModelManagerActivity;
+import de.luhmer.owncloudnewsreader.ai.ui.AiSettingsActivity;
 import de.luhmer.owncloudnewsreader.authentication.AccountGeneral;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.helper.ImageHandler;
@@ -98,6 +104,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
         addPreferencesFromResource(R.xml.pref_data_sync);
         bindDataSyncPreferences(this);
+
+        addPreferencesFromResource(R.xml.pref_ai);
+        bindAiPreferences();
 
         addPreferencesFromResource(R.xml.pref_about);
         bindAboutPreferences(this);
@@ -476,5 +485,80 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 sa.resultIntent.putExtra(SettingsActivity.RI_CACHE_CLEARED, true);
             }
         }
+    }
+
+    /**
+     * The two AI rows. On an unsupported device the switch is disabled and checked off rather than
+     * hidden: the user who reads the settings screen wondering where the feature is deserves the
+     * one-line answer, and hiding it would make "why is there no For you folder?" unanswerable.
+     *
+     * <p>Turning the switch on with no model installed opens the model manager immediately —
+     * enabling a feature that then silently does nothing is the failure this jump prevents.</p>
+     */
+    private void bindAiPreferences() {
+        final TwoStatePreference enabled = findPreference(SettingsActivity.CB_AI_ENABLED);
+        final Preference aiScreen = findPreference(SettingsActivity.PREF_AI_SETTINGS);
+        if (enabled == null || aiScreen == null) {
+            return;
+        }
+        if (AiCapability.tier(requireContext()) == AiCapability.Tier.UNSUPPORTED) {
+            enabled.setEnabled(false);
+            enabled.setChecked(false);
+            aiScreen.setEnabled(false);
+            aiScreen.setSummary(R.string.pref_summary_ai_unsupported);
+            return;
+        }
+
+        enabled.setOnPreferenceChangeListener((preference, newValue) -> {
+            boolean on = Boolean.TRUE.equals(newValue);
+            ((TwoStatePreference) preference).setChecked(on);
+            if (on) {
+                if (!AiModelRepository.hasAnyInstalledLlm(requireContext())) {
+                    startActivity(new Intent(requireContext(), AiModelManagerActivity.class));
+                }
+            } else {
+                // Off means off within seconds, not "after the current run finishes": cancel the
+                // queued work and release the engine. cancelProcess lands within about one token,
+                // and the in-flight batch degrades to LLM_SCORE = NULL, which is retryable.
+                AiTriageScheduler.cancel(requireContext());
+                AiEngineManager.shutdownNow("cb_ai_enabled turned off");
+            }
+            return true;
+        });
+
+        aiScreen.setOnPreferenceClickListener(preference -> {
+            startActivity(new Intent(requireContext(), AiSettingsActivity.class));
+            return true;
+        });
+        updateAiSummary();
+    }
+
+    /** Refreshed in onResume so the summary is right after a download, not after a restart. */
+    private void updateAiSummary() {
+        Preference aiScreen = findPreference(SettingsActivity.PREF_AI_SETTINGS);
+        if (aiScreen == null || !aiScreen.isEnabled()) {
+            return;
+        }
+        try {
+            AiModelRepository repo = new AiModelRepository(requireContext());
+            if (repo.installedCount() == 0) {
+                aiScreen.setSummary(R.string.pref_summary_ai_no_model);
+            } else {
+                aiScreen.setSummary(getString(R.string.pref_summary_ai_installed,
+                        repo.installedCount(),
+                        android.text.format.Formatter.formatShortFileSize(
+                                requireContext(), repo.installedBytes()),
+                        android.text.format.Formatter.formatShortFileSize(
+                                requireContext(), repo.freeExternalBytes())));
+            }
+        } catch (Throwable t) {
+            aiScreen.setSummary(R.string.pref_summary_ai_no_model);
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateAiSummary();
     }
 }

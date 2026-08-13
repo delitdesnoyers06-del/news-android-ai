@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A static placeholder bar, not an animated shimmer: an animation on a RecyclerView header that may
+  sit there for a minute is a battery cost with no information in it. The bar says "something is
+  coming here", which is the whole message.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="?attr/colorControlHighlight" />
+    <corners android:radius="6dp" />
+</shape>

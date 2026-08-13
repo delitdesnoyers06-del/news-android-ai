@@ -131,6 +131,68 @@ public class NextcloudNotificationManager {
 
 
 
+    /**
+     * The AI triage worker's foreground notification. Deliberately silent and low priority: this
+     * runs after every sync and must never feel like an event.
+     */
+    public static Notification buildNotificationAiTriage(Context context, String channelId) {
+        getNotificationManagerAndCreateChannel(context, channelId);
+
+        Intent intentNewsReader = new Intent(context, NewsReaderListActivity.class);
+        PendingIntent pIntent = PendingIntent.getActivity(context, 0, intentNewsReader,
+                PendingIntent.FLAG_IMMUTABLE);
+
+        return new NotificationCompat.Builder(context, channelId)
+                .setContentTitle(context.getResources().getString(R.string.app_name))
+                .setContentText(context.getString(R.string.ai_notification_triage_running))
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentIntent(pIntent)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOnlyAlertOnce(true)
+                .setOngoing(true)
+                .build();
+    }
+
+
+    /**
+     * The daily digest notification — opt-in, off by default (product §3).
+     *
+     * <p>Text is the first sentence of the abstract plus the item count; there is no second
+     * inference to write it. Tapping it opens {@code AiDigestActivity} for that exact digest id, not
+     * "the latest one": a notification that arrived this morning must still open this morning's
+     * digest when it is tapped at lunchtime.</p>
+     */
+    public static void showNotificationAiDigest(Context context, String channelId,
+                                                int notificationId, long digestId,
+                                                String firstSentence, int itemCount) {
+        NotificationManager notificationManager =
+                getNotificationManagerAndCreateChannel(context, channelId);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                && !notificationManager.areNotificationsEnabled()) {
+            return;
+        }
+        Intent intent = new Intent(context, de.luhmer.owncloudnewsreader.ai.ui.AiDigestActivity.class);
+        intent.putExtra(de.luhmer.owncloudnewsreader.ai.ui.AiDigestActivity.EXTRA_DIGEST_ID, digestId);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pIntent = PendingIntent.getActivity(context, (int) digestId, intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        String text = context.getResources().getQuantityString(R.plurals.ai_digest_notification_text,
+                itemCount, itemCount);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
+                .setContentTitle(context.getString(R.string.ai_digest_title))
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentIntent(pIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+        if (firstSentence != null && !firstSentence.trim().isEmpty()) {
+            builder.setStyle(new NotificationCompat.BigTextStyle()
+                    .bigText(firstSentence.trim() + "\n" + text));
+        }
+        notificationManager.notify(notificationId, builder.build());
+    }
+
     public static void showNotificationImageDownloadLimitReached(Context context, String channelId, int limit) {
         NotificationManager notificationManager = getNotificationManagerAndCreateChannel(context, channelId);
 
