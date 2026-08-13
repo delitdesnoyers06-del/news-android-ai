@@ -50,19 +50,23 @@ android {
     def releaseKeystorePath = System.getenv('SIGNING_KEYSTORE_FILE')
     def hasReleaseKeystore = releaseKeystorePath != null && !releaseKeystorePath.isEmpty() &&
             file(releaseKeystorePath).exists()
+    // Precompute the passwords/alias here rather than inside the signingConfigs closure: a ternary
+    // written next to a DSL method (keyPassword (...) ? ... : ...) is parsed by Groovy as a method
+    // call, which blew up config with "Value is null". keytool defaults to PKCS12, where the key
+    // password equals the store password, so SIGNING_KEY_PASSWORD is optional and falls back to it.
+    def releaseStorePassword = System.getenv('SIGNING_KEYSTORE_PASSWORD')
+    def releaseKeyAlias = System.getenv('SIGNING_KEY_ALIAS')
+    def releaseKeyPasswordEnv = System.getenv('SIGNING_KEY_PASSWORD')
+    def releaseKeyPassword = (releaseKeyPasswordEnv != null && !releaseKeyPasswordEnv.isEmpty()) ?
+            releaseKeyPasswordEnv : releaseStorePassword
 
     signingConfigs {
         if (hasReleaseKeystore) {
             release {
-                def storePass = System.getenv('SIGNING_KEYSTORE_PASSWORD')
-                // keytool now defaults to PKCS12, where the key password equals the store password.
-                // SIGNING_KEY_PASSWORD is therefore optional: fall back to the store password when
-                // it is unset, so a single-password keystore needs only three secrets.
-                def keyPass = System.getenv('SIGNING_KEY_PASSWORD')
                 storeFile file(releaseKeystorePath)
-                storePassword storePass
-                keyAlias System.getenv('SIGNING_KEY_ALIAS')
-                keyPassword (keyPass != null && !keyPass.isEmpty()) ? keyPass : storePass
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }

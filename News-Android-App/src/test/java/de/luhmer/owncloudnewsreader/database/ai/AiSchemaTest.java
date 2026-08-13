@@ -148,5 +148,9 @@ public class AiSchemaTest extends AiDbTestBase {
         AiModelRegistry models = new AiModelRegistry(db);
         models.register("gemma-4-E2B", AiModelRegistry.KIND_LLM, 2588147712L, "1819381");
         models.setState("gemma-4-E2B", AiModelRegistry.STATE_INSTALLED, "/data/x.litertlm", null);
+
+        // AI_FULLTEXT (schema v2): the extracted full body must survive a greenDAO wipe too.
+        new FullTextStore(db).saveOk(1001L, "https://example.com/article",
+                "<p>the full extracted body</p>", "the full extracted body", 555L);
     }
 }

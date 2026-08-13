@@ -5,6 +5,15 @@ on:
     branches-ignore:
       - 'dependabot/**'
   pull_request:
+
+# CodeQL scanned fine but failed to upload its SARIF ("Resource not accessible by integration")
+# because a workflow with no permissions block inherits a read-only token. Grant the writes the
+# upload needs; keep everything else least-privilege.
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
 jobs:
   codeql:
     name: CodeQL security scan
