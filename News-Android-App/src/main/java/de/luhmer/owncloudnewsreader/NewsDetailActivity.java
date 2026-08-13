@@ -42,6 +42,8 @@ import android.webkit.WebView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentPagerAdapter;
@@ -51,7 +53,13 @@ import androidx.viewpager.widget.ViewPager;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import javax.inject.Inject;
@@ -59,6 +67,9 @@ import javax.inject.Inject;
 import de.greenrobot.dao.query.LazyList;
 import de.luhmer.owncloudnewsreader.ai.AiDecisions;
 import de.luhmer.owncloudnewsreader.ai.AiFeature;
+import de.luhmer.owncloudnewsreader.ai.model.AiCatalog;
+import de.luhmer.owncloudnewsreader.ai.model.AiCatalogEntry;
+import de.luhmer.owncloudnewsreader.async_tasks.RssItemToHtmlTask;
 import de.luhmer.owncloudnewsreader.database.DatabaseConnectionOrm;
 import de.luhmer.owncloudnewsreader.database.model.RssItem;
 import de.luhmer.owncloudnewsreader.databinding.ActivityNewsDetailBinding;
@@ -92,6 +103,13 @@ public class NewsDetailActivity extends PodcastFragmentActivity {
 	 */
 	private ViewPager mViewPager;
 	private int currentPosition;
+
+	/**
+	 * Per-article reading-language overrides, keyed by RSS item id. A value is a BCP-47 base
+	 * language (e.g. {@code "fr"}); the absence of a key means "detect automatically". Kept in
+	 * memory only — a deliberate per-session choice, not a persisted setting.
+	 */
+	private final Map<Long, String> ttsLanguageOverrides = new HashMap<>();
 
 	private MenuItem menuItem_PlayPodcast;
 	private MenuItem menuItem_RemovePodcast;
@@ -542,6 +560,8 @@ public class NewsDetailActivity extends PodcastFragmentActivity {
 			});
 		} else if (itemId == R.id.action_tts) {
 			this.startTTS(currentPosition);
+		} else if (itemId == R.id.action_tts_language) {
+			this.showTtsLanguageDialog(currentPosition);
 		} else if (itemId == R.id.action_ShareItem) {
 			this.share(currentPosition);
 		} else if (itemId == R.id.action_incognito_mode) {
@@ -612,10 +632,87 @@ public class NewsDetailActivity extends PodcastFragmentActivity {
 	 */
 	private void startTTS(int currentPosition) {
 		RssItem rssItem = rssItems.get(currentPosition);
-		String text = rssItem.getTitle() + ". " + Html.fromHtml(rssItem.getBody()).toString();
+		// Read the same body the reader shows: the Readability-extracted full text when the
+		// full-article feature is on and an extraction exists, else the RSS body. The lookup hits
+		// the database, so resolve it off the main thread and build the item back on it.
+		new Thread(() -> {
+			String body;
+			try {
+				body = RssItemToHtmlTask.resolveEffectiveBody(getApplicationContext(), rssItem, mPrefs);
+			} catch (Throwable t) {
+				Log.w(TAG, "TTS body lookup failed, using RSS body", t);
+				body = rssItem.getBody();
+			}
+			final String resolved = body;
+			runOnUiThread(() -> startTTSWithText(rssItem, resolved));
+		}, "tts-body-resolve").start();
+	}
+
+	/**
+	 * Builds the TTS item and starts playback. {@code effectiveBody} is the HTML body to read — the
+	 * extracted full article when available, else the RSS body ("light version").
+	 */
+	private void startTTSWithText(RssItem rssItem, @Nullable String effectiveBody) {
+		String bodyHtml = (effectiveBody != null && !effectiveBody.isEmpty())
+				? effectiveBody
+				: rssItem.getBody();
+		String text = rssItem.getTitle() + ". " + Html.fromHtml(bodyHtml).toString();
 		// Log.d(TAG, text);
 		TTSItem ttsItem = new TTSItem(rssItem.getId(), rssItem.getAuthor(), rssItem.getTitle(), text, rssItem.getFeed().getFaviconUrl());
+		ttsItem.ttsLanguage = ttsLanguageOverrides.get(rssItem.getId());
 		openMediaItem(ttsItem);
+	}
+
+	/**
+	 * Lets the user pick the reading language for the current article, overriding auto-detection.
+	 * The choice is kept per item for this session and applied on the next {@link #startTTS(int)}.
+	 */
+	private void showTtsLanguageDialog(int currentPosition) {
+		RssItem rssItem = rssItems.get(currentPosition);
+
+		// Ordered map of language code -> display name; the leading null entry is "Automatic".
+		LinkedHashMap<String, String> options = new LinkedHashMap<>();
+		options.put(null, getString(R.string.tts_language_automatic));
+		for (String lang : availableTtsLanguages()) {
+			String display = new Locale(lang).getDisplayLanguage();
+			options.put(lang, (display == null || display.isEmpty()) ? lang : display);
+		}
+
+		List<String> codes = new ArrayList<>(options.keySet());
+		CharSequence[] labels = options.values().toArray(new CharSequence[0]);
+		String current = ttsLanguageOverrides.get(rssItem.getId());
+		int checked = Math.max(0, codes.indexOf(current));
+
+		new AlertDialog.Builder(this)
+				.setTitle(R.string.tts_language_dialog_title)
+				.setSingleChoiceItems(labels, checked, (dialog, which) -> {
+					String selected = codes.get(which);
+					if (selected == null) {
+						ttsLanguageOverrides.remove(rssItem.getId());
+					} else {
+						ttsLanguageOverrides.put(rssItem.getId(), selected);
+					}
+					dialog.dismiss();
+				})
+				.setNegativeButton(android.R.string.cancel, null)
+				.show();
+	}
+
+	/** Distinct BCP-47 base languages the app has TTS voices for, sorted by display name. */
+	private List<String> availableTtsLanguages() {
+		List<String> langs = new ArrayList<>();
+		try {
+			for (AiCatalogEntry e : AiCatalog.of(this).ttsModels()) {
+				if (e.lang != null && !e.lang.isEmpty() && !langs.contains(e.lang)) {
+					langs.add(e.lang);
+				}
+			}
+		} catch (Throwable t) {
+			Log.w(TAG, "could not list TTS languages", t);
+		}
+		langs.sort((a, b) -> new Locale(a).getDisplayLanguage()
+				.compareToIgnoreCase(new Locale(b).getDisplayLanguage()));
+		return langs;
 	}
 
 	/**

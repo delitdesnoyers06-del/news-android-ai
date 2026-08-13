@@ -11,4 +11,11 @@ public class TTSItem extends MediaItem {
     }
 
     public String text;
+
+    /**
+     * BCP-47 base language (e.g. {@code "en"}, {@code "fr"}) chosen by the user for this article,
+     * or {@code null} to detect it automatically. Overrides {@link de.luhmer.owncloudnewsreader
+     * .services.podcast.ArticleLanguage} auto-detection when set.
+     */
+    public String ttsLanguage;
 }

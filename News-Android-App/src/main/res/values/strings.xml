@@ -242,6 +242,9 @@
     <string name="action_add_new_feed">Add new feed</string>
     <string name="action_add_new_folder">Add new folder</string>
     <string name="action_textToSpeech">Read out</string>
+    <string name="action_tts_language">Reading language</string>
+    <string name="tts_language_dialog_title">Reading language for this article</string>
+    <string name="tts_language_automatic">Automatic (detect)</string>
     <string name="action_search">Search</string>
     <string name="action_download_articles_offline">Download articles offline</string>
     <string name="news_list_drawer_text" translatable="false">Feed-list</string>

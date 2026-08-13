@@ -126,9 +126,10 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
     @Override
     public void onInit(int status) {
         if (status == TextToSpeech.SUCCESS) {
-            // Use the device language so the engine picks a fitting voice. The user can change
-            // engine and voice through the system TTS settings shortcut in the app settings.
-            ttsController.setLanguage(Locale.getDefault());
+            // Use the language the user chose for this article, else the device language so the
+            // engine picks a fitting voice. The user can change engine and voice through the system
+            // TTS settings shortcut in the app settings.
+            ttsController.setLanguage(readingLocale());
 
             if (chunks == null || chunks.isEmpty()) {
                 setStatus(PlaybackStateCompat.STATE_ERROR);
@@ -140,6 +141,24 @@ public class TTSPlaybackService extends PlaybackService implements TextToSpeech.
             Log.e("TTS", "Initialization Failed!");
             ttsController = null;
         }
+    }
+
+    /**
+     * The locale to read this article in: the user's per-article override when set, else the
+     * device default. An unsupported override falls back to the default rather than staying silent.
+     */
+    private Locale readingLocale() {
+        String lang = ((TTSItem) getMediaItem()).ttsLanguage;
+        if (lang == null || lang.isEmpty()) {
+            return Locale.getDefault();
+        }
+        Locale locale = Locale.forLanguageTag(lang);
+        int result = ttsController.isLanguageAvailable(locale);
+        if (result == TextToSpeech.LANG_NOT_SUPPORTED || result == TextToSpeech.LANG_MISSING_DATA) {
+            Log.w(TAG, "requested TTS language " + lang + " unavailable; using device default");
+            return Locale.getDefault();
+        }
+        return locale;
     }
 
     private void speakFrom(int startIndex) {

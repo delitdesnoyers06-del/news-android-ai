@@ -183,11 +183,12 @@ public class RssItemToHtmlTask extends AsyncTask<Void, Void, String> {
     }
 
     /**
-     * The article body to render: the Readability-extracted full text when the feature is on and an
-     * extraction exists for this item, otherwise the RSS-provided body. Never throws — any lookup
-     * failure falls back to the RSS body.
+     * The article body to render or read aloud: the Readability-extracted full text when the
+     * feature is on and an extraction exists for this item, otherwise the RSS-provided body. Never
+     * throws — any lookup failure falls back to the RSS body. Does a database read, so call it off
+     * the main thread.
      */
-    private static String resolveEffectiveBody(@Nullable Context context, RssItem rssItem, SharedPreferences prefs) {
+    public static String resolveEffectiveBody(@Nullable Context context, RssItem rssItem, SharedPreferences prefs) {
         String body = rssItem.getBody();
         if (context == null || !prefs.getBoolean(SettingsActivity.CB_FULLTEXT_EXTRACTION, false)) {
             return body;
